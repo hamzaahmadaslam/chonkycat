@@ -87,6 +87,7 @@
       o.start(t0);
       o.stop(t0 + 0.65);
     },
+    mew() { tone('triangle', 900, 1350, 0.1, 0.22); tone('triangle', 1300, 1000, 0.09, 0.16, 0.09); },
     mrrp() { tone('triangle', 380, 620, 0.14, 0.35); tone('triangle', 620, 520, 0.1, 0.25, 0.12); },
     purr() {
       const a = ctx();

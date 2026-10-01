@@ -72,9 +72,14 @@ function answer(q, { settings, status, stats }) {
     if (!waiting.length) return 'Nobody is waiting on you right now. Go stretch!';
     return waiting.map((s) => `${s.project} is waiting ${Math.round(s.needsFor / 1000)}s: ${s.pending ? s.pending.summary : s.detail}`).join('\n');
   }
-  if (has(/\b(kitten|subagent|helper|agent)\b/)) {
-    const ks = sessions.flatMap((s) => s.subagents.map((k) => `${k.type} for ${s.project}: ${k.detail || 'working'}`));
-    return ks.length ? ks.join('\n') : 'No kittens out right now. They’re napping in my fur.';
+  if (has(/\b(kittens?|subagents?|helpers?|agents?)\b/)) {
+    const all = status.agents || [];
+    const live = all.filter((a) => a.state === 'working' || a.state === 'needs');
+    const done = all.filter((a) => a.state === 'done');
+    if (!all.length) return 'No kittens out right now. They’re napping in my fur.';
+    const lines = live.map((a) => `${a.state === 'needs' ? '🙋' : '🐱'} ${a.type} (${a.project}): ${a.state === 'needs' ? 'needs you, ' : ''}${a.detail || 'working'}`);
+    if (done.length) lines.push(`✅ ${done.length} finished recently, latest: ${done[0].type}${done[0].summary ? ' said “' + done[0].summary.slice(0, 120) + '”' : ''}`);
+    return lines.join('\n') + '\n(Right-click me → Agents for the full list.)';
   }
   // default: status report
   if (!sessions.length) return `${meow()} No Claude Code sessions are running. I’m on nap duty.`;

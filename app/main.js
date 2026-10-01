@@ -177,6 +177,7 @@ function refreshTrayMenu() {
     { label: `${settings.name} · 🐟 ${s.fish}  ·  🔥 ${s.streakDays}-day streak`, enabled: false },
     { type: 'separator' },
     ...sessionItems,
+    ...((snap.agents || []).filter((a) => a.state === 'working' || a.state === 'needs').slice(0, 6).map((a) => ({ label: `   ${a.state === 'needs' ? '🙋' : '🐱'} ${a.type}: ${a.detail || 'working'}`, enabled: false }))),
     { type: 'separator' },
     { label: overlay && overlay.isVisible() ? 'Hide' : 'Show', click: toggleVisible },
     { label: 'Do not disturb', type: 'checkbox', checked: !!settings.dnd, click: (m) => applySettings({ dnd: m.checked }) },
@@ -385,7 +386,7 @@ function toLocal(w) {
 
 function sanitize(p) {
   const out = {};
-  const allowed = ['hat', 'notifications', 'roam', 'name', 'skin', 'size', 'fps', 'sounds', 'volume', 'speakSummaries', 'voice', 'showStatusLine', 'pawApproval', 'pawApprovalTimeout', 'dangerGuard', 'randomAnimations', 'animationFrequency', 'desktopAwareness', 'runToWindow', 'perchOnWindows', 'cursorPlay', 'breakGuardian', 'breakMinutes', 'autoStart', 'launchAtLogin', 'hotkey', 'dnd', 'seasonal', 'cafe'];
+  const allowed = ['kittens', 'kittenLabels', 'maxKittens', 'kittenColors', 'hat', 'notifications', 'roam', 'name', 'skin', 'size', 'fps', 'sounds', 'volume', 'speakSummaries', 'voice', 'showStatusLine', 'pawApproval', 'pawApprovalTimeout', 'dangerGuard', 'randomAnimations', 'animationFrequency', 'desktopAwareness', 'runToWindow', 'perchOnWindows', 'cursorPlay', 'breakGuardian', 'breakMinutes', 'autoStart', 'launchAtLogin', 'hotkey', 'dnd', 'seasonal', 'cafe'];
   for (const k of allowed) if (p && k in p) out[k] = p[k];
   if ('name' in out) out.name = String(out.name || 'Arshia').trim().slice(0, 24) || 'Arshia';
   if ('size' in out) out.size = Math.max(90, Math.min(420, Number(out.size) || 190));
@@ -396,6 +397,9 @@ function sanitize(p) {
   num('animationFrequency', 0.3, 3, 1);
   num('pawApprovalTimeout', 5, 110, 25);
   num('breakMinutes', 15, 300, 90);
+  num('maxKittens', 1, 8, 2);
+  if ('kittenLabels' in out) out.kittenLabels = ['off', 'name', 'activity'].includes(out.kittenLabels) ? out.kittenLabels : 'activity';
+  if ('kittenColors' in out) out.kittenColors = out.kittenColors === 'match' ? 'match' : 'mixed';
   if ('fps' in out) out.fps = [20, 24, 30, 45, 60].includes(Number(out.fps)) ? Number(out.fps) : 24;
   return out;
 }
@@ -431,6 +435,7 @@ app.whenReady().then(async () => {
   server.on('control', (c) => {
     const action = c && c.action;
     if (action === 'settings') openSettings();
+    else if (action === 'agents') { if (overlay) overlay.showInactive(); send('fx', { type: 'open-agents' }); }
     else if (action === 'quit') setTimeout(() => app.quit(), 50);
     else if (action === 'show') { if (overlay) { overlay.showInactive(); send('fx', { type: 'hello' }); } }
     else if (action === 'hide') { if (overlay) overlay.hide(); }

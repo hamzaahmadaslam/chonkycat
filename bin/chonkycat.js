@@ -200,12 +200,19 @@ async function demo() {
     ['Claude reads files', { hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: 'src/app.ts' } }, 4],
     ['Claude edits code', { hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: 'src/app.ts' } }, 4],
     ['Claude searches the web', { hook_event_name: 'PreToolUse', tool_name: 'WebSearch', tool_input: { query: 'cat facts' } }, 4],
-    ['Subagent kittens', { hook_event_name: 'SubagentStart', agent_id: 'k1', agent_type: 'Explore' }, 1],
-    ['', { hook_event_name: 'SubagentStart', agent_id: 'k2', agent_type: 'Plan' }, 4],
+    ['Claude sends helpers', { hook_event_name: 'PreToolUse', tool_name: 'Task', tool_input: { subagent_type: 'Explore', description: 'Find where checkout lives' } }, 0.3],
+    ['', { hook_event_name: 'PreToolUse', tool_name: 'Task', tool_input: { subagent_type: 'Plan', description: 'Plan the refactor' } }, 0.3],
+    ['Subagent kittens pop out', { hook_event_name: 'SubagentStart', agent_id: 'k1', agent_type: 'Explore' }, 1],
+    ['', { hook_event_name: 'SubagentStart', agent_id: 'k2', agent_type: 'Plan' }, 2.5],
+    ['Kittens get to work', { hook_event_name: 'PreToolUse', agent_id: 'k1', tool_name: 'Grep', tool_input: { pattern: 'checkout' } }, 1.5],
+    ['', { hook_event_name: 'PreToolUse', agent_id: 'k1', tool_name: 'Read', tool_input: { file_path: 'src/cart.ts' } }, 0.3],
+    ['', { hook_event_name: 'PreToolUse', agent_id: 'k2', tool_name: 'WebSearch', tool_input: { query: 'refactor patterns' } }, 2.5],
+    ['A kitten needs permission', { hook_event_name: 'PermissionRequest', agent_id: 'k2', tool_name: 'Bash', tool_input: { command: 'npm ls' } }, 3],
+    ['', { hook_event_name: 'PostToolUse', agent_id: 'k2', tool_name: 'Bash', tool_input: { command: 'npm ls' } }, 1],
     ['Runs the tests', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'npm test' } }, 2],
     ['Tests pass', { hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'npm test' }, tool_response_exit_code: 0 }, 4],
-    ['Kittens come home', { hook_event_name: 'SubagentStop', agent_id: 'k1', agent_type: 'Explore' }, 1],
-    ['', { hook_event_name: 'SubagentStop', agent_id: 'k2', agent_type: 'Plan' }, 3],
+    ['Kittens come home with fish', { hook_event_name: 'SubagentStop', agent_id: 'k1', agent_type: 'Explore', last_assistant_message: 'Checkout lives in src/cart.ts and src/pay.ts; totals are computed in cart.total().' }, 1],
+    ['', { hook_event_name: 'SubagentStop', agent_id: 'k2', agent_type: 'Plan', last_assistant_message: 'Plan: 1) extract pricing, 2) add tests, 3) swap the call sites.' }, 3],
     ['git commit', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git commit -m "feat"' } }, 0.5],
     ['', { hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'git commit -m "feat"' }, tool_response_exit_code: 0 }, 4],
     ['Danger sense', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'rm -rf node_modules' } }, 4],
@@ -257,6 +264,7 @@ function help() {
   npx chonkycat status         is she awake? stats
   npx chonkycat demo           play every reaction once
   npx chonkycat settings       open the settings window
+  npx chonkycat agents         review every subagent (kitten) and its status
   npx chonkycat show | hide
   npx chonkycat play <reaction>  e.g. play git-push, play tests-pass
   npx chonkycat install-hooks  connect to Claude Code via ~/.claude/settings.json
@@ -266,5 +274,5 @@ function help() {
 Data lives in ${HOME}`);
 }
 
-const table = { start, stop, status, demo, doctor, settings: () => control('settings'), show: () => control('show'), hide: () => control('hide'), play: () => control('fx', { type: process.argv[3] || 'hello' }), 'install-hooks': installHooks, 'uninstall-hooks': uninstallHooks, help, '--help': help, '-h': help };
+const table = { start, stop, status, demo, doctor, agents: () => control('agents'), settings: () => control('settings'), show: () => control('show'), hide: () => control('hide'), play: () => control('fx', { type: process.argv[3] || 'hello' }), 'install-hooks': installHooks, 'uninstall-hooks': uninstallHooks, help, '--help': help, '-h': help };
 (table[cmd] || help)();

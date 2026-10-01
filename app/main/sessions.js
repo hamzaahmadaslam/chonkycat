@@ -20,6 +20,7 @@ class Sessions extends EventEmitter {
     super();
     this.map = new Map();
     this.ended = new Map(); // session id -> time it ended
+    this.history = []; // recently finished subagents, newest first, for the Agents panel
     this.lastActivity = 0;
     this.timer = setInterval(() => this.tick(), 1000);
     if (this.timer.unref) this.timer.unref();
@@ -39,6 +40,7 @@ class Sessions extends EventEmitter {
         lastEvent: Date.now(),
         holdUntil: 0,
         subagents: new Map(),
+        taskQueue: [], // Task/Agent tool calls waiting for their SubagentStart (gives kittens a description)
         context: { tokens: 0, window: 200000 },
         model: '',
         transcript: '',
@@ -75,6 +77,8 @@ class Sessions extends EventEmitter {
     if (ev.model) s.model = ev.model;
     const fromSubagent = !!ev.agent_id && ev.hook_event_name !== 'SubagentStart' && ev.hook_event_name !== 'SubagentStop';
 
+    const agent = fromSubagent ? s.subagents.get(ev.agent_id) : null;
+    if (agent) agent.lastEvent = now;
     const set = (state, extra) => {
       s.state = state;
       s.since = now;
@@ -104,9 +108,13 @@ class Sessions extends EventEmitter {
         const risk = riskOf(ev.tool_name, ev.tool_input);
         const activity = activityOf(ev.tool_name, ev.tool_input);
         s.tools++;
+        if (!fromSubagent && (ev.tool_name === 'Task' || ev.tool_name === 'Agent') && ev.tool_input) {
+          s.taskQueue.push({ type: ev.tool_input.subagent_type || '', description: truncate(ev.tool_input.description || ev.tool_input.prompt || '', 90), at: now });
+          if (s.taskQueue.length > 12) s.taskQueue.shift();
+        }
         if (fromSubagent) {
-          const k = s.subagents.get(ev.agent_id);
-          if (k) { k.detail = describe(ev.tool_name, ev.tool_input); k.activity = activity; }
+          const k = agent;
+          if (k) { k.detail = describe(ev.tool_name, ev.tool_input); k.activity = activity; k.tools++; if (k.state !== 'needs') k.state = 'working'; }
           if (!risk) break; // keep the main cat on the main thread's activity
           s.alertAgent = ev.agent_id;
         }
@@ -123,7 +131,7 @@ class Sessions extends EventEmitter {
         break;
       }
       case 'PostToolUse': {
-        if (fromSubagent) { clearSubagentAlert(); break; }
+        if (fromSubagent) { if (agent && agent.state === 'needs') { agent.state = 'working'; agent.detail = 'Working…'; } clearSubagentAlert(); break; }
         const activity = activityOf(ev.tool_name, ev.tool_input);
         const code = ev.tool_response_exit_code;
         const failed = typeof code === 'number' && code !== 0;
@@ -137,7 +145,7 @@ class Sessions extends EventEmitter {
         break;
       }
       case 'PostToolUseFailure': {
-        if (fromSubagent) { clearSubagentAlert(); break; }
+        if (fromSubagent) { if (agent) { agent.errors++; agent.lastError = `${ev.tool_name || 'Tool'} failed`; agent.state = 'working'; this.fx('kitten-oops', s, { agentId: agent.id }); } clearSubagentAlert(); break; }
         const activity = activityOf(ev.tool_name, ev.tool_input);
         set('error', { holdUntil: now + ERROR_HOLD_MS, detail: `${ev.tool_name || 'Tool'} failed`, risk: null, needsSince: 0, pending: null });
         this.fx(activity === 'testing' ? 'tests-fail' : 'tool-fail', s, { tool: ev.tool_name });
@@ -145,7 +153,7 @@ class Sessions extends EventEmitter {
       }
       case 'PermissionRequest': {
         if (fromSubagent && !s.subagents.size) break;
-        if (fromSubagent) s.alertAgent = ev.agent_id;
+        if (fromSubagent) { s.alertAgent = ev.agent_id; if (agent) { agent.state = 'needs'; agent.detail = `Wants to: ${describe(ev.tool_name, ev.tool_input)}`; } }
         const risk = riskOf(ev.tool_name, ev.tool_input);
         set(risk ? 'danger' : 'needs', {
           detail: `Wants to: ${describe(ev.tool_name, ev.tool_input)}`,
@@ -162,6 +170,7 @@ class Sessions extends EventEmitter {
         break;
       case 'Notification': {
         const type = ev.notification_type || '';
+        if (agent && (type === 'permission_prompt' || type === 'agent_needs_input')) agent.state = 'needs';
         if (type === 'permission_prompt' || type === 'elicitation_dialog' || type === 'agent_needs_input') {
           if (s.state !== 'danger') set('needs', { detail: truncate(ev.message || 'Needs your input', 60), needsSince: s.needsSince || now });
           this.fx('needs', s, { reason: type, message: ev.message });
@@ -189,7 +198,12 @@ class Sessions extends EventEmitter {
         break;
       case 'SubagentStart': {
         const key = ev.agent_id || `${now}`;
-        s.subagents.set(key, { id: key, type: ev.agent_type || 'helper', started: now, detail: 'Starting…' });
+        // pair with the Task call that launched it (same type first, else oldest pending)
+        let qi = s.taskQueue.findIndex((q) => q.type && q.type === ev.agent_type);
+        if (qi < 0) qi = s.taskQueue.length ? 0 : -1;
+        const task = qi >= 0 ? s.taskQueue.splice(qi, 1)[0] : null;
+        if (s.subagents.size >= 64) s.subagents.delete(s.subagents.keys().next().value);
+        s.subagents.set(key, { id: key, type: ev.agent_type || 'helper', started: now, lastEvent: now, detail: 'Starting…', activity: null, state: 'working', tools: 0, errors: 0, lastError: '', description: task ? task.description : '', project: s.project });
         this.fx('kitten-spawn', s, { agentId: key, agentType: ev.agent_type || 'helper' });
         break;
       }
@@ -197,6 +211,10 @@ class Sessions extends EventEmitter {
         const key = ev.agent_id;
         const k = key && s.subagents.get(key);
         if (key) s.subagents.delete(key);
+        if (k) {
+          this.history.unshift({ id: k.id, type: k.type, project: s.project, description: k.description, tools: k.tools, errors: k.errors, started: k.started, ended: now, state: k.errors && !ev.last_assistant_message ? 'error' : 'done', summary: truncate(ev.last_assistant_message || '', 600), detail: k.detail });
+          if (this.history.length > 20) this.history.length = 20;
+        }
         if (key && key === s.alertAgent) { s.alertAgent = null; if (s.state === 'danger' || s.state === 'needs') set('working', { risk: null, pending: null, needsSince: 0, detail: 'Working…' }); }
         this.fx('kitten-return', s, { agentId: key, agentType: (k && k.type) || ev.agent_type || 'helper', summary: truncate(ev.last_assistant_message || '', 160) });
         break;
@@ -214,6 +232,8 @@ class Sessions extends EventEmitter {
         break;
       }
       case 'SessionEnd':
+        for (const k of s.subagents.values()) this.history.unshift({ id: k.id, type: k.type, project: s.project, description: k.description, tools: k.tools, errors: k.errors, started: k.started, ended: now, state: 'stopped', summary: '', detail: k.detail });
+        if (this.history.length > 20) this.history.length = 20;
         this.fx('session-end', s, { reason: ev.reason || ev.end_reason });
         this.map.delete(id);
         this.ended.set(id, now);
@@ -303,7 +323,7 @@ class Sessions extends EventEmitter {
       activity: s.activity,
       detail: s.detail,
       needsFor: s.needsSince ? now - s.needsSince : 0,
-      subagents: [...s.subagents.values()].map((k) => ({ id: k.id, type: k.type, detail: k.detail })),
+      subagents: [...s.subagents.values()].map((k) => agentView(k, s.project, now)),
       context: s.context,
       model: s.model,
       risk: s.risk,
@@ -322,12 +342,27 @@ class Sessions extends EventEmitter {
       needsFor: p && p.needsSince ? now - p.needsSince : 0,
       subagents: sessions.reduce((n, s) => n + s.subagents.length, 0),
       sessions,
+      agents: sessions.flatMap((x) => x.subagents).concat(this.history.filter((h) => now - h.ended < 2 * 60 * 60 * 1000).map((h) => Object.assign({}, h, { elapsed: h.ended - h.started }))),
     };
   }
 
   emitStatus() {
-    this.emit('status', this.snapshot());
+    // coalesce bursts (30 busy subagents can send 100+ events/s) into ≤ ~8 updates/s
+    const now = Date.now();
+    if (this._statusTimer) return;
+    const wait = Math.max(0, (this._lastStatusAt || 0) + 120 - now);
+    if (!wait) { this._lastStatusAt = now; this.emit('status', this.snapshot()); return; }
+    this._statusTimer = setTimeout(() => {
+      this._statusTimer = null;
+      this._lastStatusAt = Date.now();
+      this.emit('status', this.snapshot());
+    }, wait);
+    if (this._statusTimer.unref) this._statusTimer.unref();
   }
+}
+
+function agentView(k, project, now) {
+  return { id: k.id, type: k.type, project, description: k.description, detail: k.detail, activity: k.activity, state: k.state, tools: k.tools, errors: k.errors, lastError: k.lastError, started: k.started, elapsed: now - k.started, idleFor: now - k.lastEvent };
 }
 
 function friendlyError(type) {

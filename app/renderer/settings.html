@@ -82,6 +82,15 @@
   </section>
 
   <section>
+    <h2>🐱 Subagent kittens</h2>
+    <div class="row"><label for="kittens">Show kittens for subagents<small>Each helper Claude sends (Explore, Plan, …) becomes a kitten that acts out its work</small></label><input id="kittens" type="checkbox"></div>
+    <div class="row"><label for="kittenLabels">Kitten labels</label><select id="kittenLabels"><option value="activity">Name + what it's doing</option><option value="name">Name only</option><option value="off">No labels</option></select></div>
+    <div class="row"><label for="kittenColors">Kitten coats</label><select id="kittenColors"><option value="mixed">Mixed litter</option><option value="match">Same as your cat</option></select></div>
+    <div class="row"><label for="maxKittens">Most kittens on screen</label><input id="maxKittens" type="number" min="1" max="8" title="Default 2"></div>
+    <div class="row"><label>Review agents<small>Right-click your cat → Agents, or click any kitten, to see every subagent's status, tools and final summary</small></label><button class="btn" id="testKitten" type="button">Send a test kitten</button></div>
+  </section>
+
+  <section>
     <h2>🔊 Sound & voice</h2>
     <div class="row"><label for="sounds">Meows, purrs and jingles</label><input id="sounds" type="checkbox"></div>
     <div class="row"><label for="volume">Volume</label><input id="volume" type="range" min="0" max="1" step="0.05"></div>

@@ -28,6 +28,10 @@ const DEFAULTS = {
   dangerGuard: true,
   randomAnimations: true,
   roam: true,
+  kittens: true,
+  kittenLabels: 'activity', // off | name | activity
+  maxKittens: 2, // more than this wait in the "+N more" badge / Agents panel
+  kittenColors: 'mixed', // mixed | match
   hat: '',
   notifications: 'hidden', // off | hidden (only when the cat is hidden) | always
   animationFrequency: 1, // 0.5 calm … 2 hyper

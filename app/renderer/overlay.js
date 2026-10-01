@@ -798,18 +798,62 @@
   };
 
   // ============================================================ kittens --
+  // Every Claude Code subagent becomes a kitten. It pops out from behind Arshia,
+  // trots to a spot, acts out what the subagent is doing (from live status), waves
+  // when it needs permission, gets dizzy on errors, and hops home with a fish.
   const kittens = new Map();
+  let kittenPileX = null; // where the "+N more" badge sits (click → Agents panel)
   const KITTEN_PROP = { Explore: 'binoculars', Plan: 'clipboard', 'general-purpose': 'laptop', 'code-reviewer': 'book', 'statusline-setup': 'terminal' };
-  function spawnKitten(id, type) {
-    if (kittens.size >= 8) return;
-    const n = kittens.size;
-    const side = n % 2 ? -1 : 1;
-    const slot = Math.floor(n / 2);
-    const tx = clamp(cat.x + side * (cat.w * 0.85 + slot * cat.w * 0.55), 60, view.w - 60);
-    kittens.set(id, { id, type, x: cat.x, y: env.floorY(), tx, state: 'out', t0: now(), flip: side > 0 ? -1 : 1, walkPhase: 0, skin: settings.skin, prop: KITTEN_PROP[type] || pick(['laptop', 'book', 'terminal', 'binoculars']) });
-    env.sfx('pop');
-    burst('spark', cat.x, cat.y - cat.h * 0.3, 6);
+  const COATS = ['tabby', 'grey', 'tuxedo', 'calico'];
+  const hashStr = (str) => { let h = 7; for (const ch of String(str)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
+
+  function kittenSlot() {
+    const used = new Set([...kittens.values()].filter((k) => k.state !== 'home').map((k) => k.slot));
+    let n = 0;
+    while (used.has(n)) n++;
+    return n;
   }
+
+  // a free spot on screen: alternate sides, step outward, never on top of another kitten
+  function kittenSpot() {
+    const gap = cat.w * 0.5;
+    const taken = [...kittens.values()].filter((k) => k.state !== 'home').map((k) => k.tx);
+    for (let ring = 0; ring < 12; ring++) {
+      for (const side of [1, -1]) {
+        const x = cat.x + side * (cat.w * 0.85 + ring * gap);
+        if (x < 60 || x > view.w - 60) continue;
+        if (taken.every((t) => Math.abs(t - x) > gap * 0.9)) return x;
+      }
+    }
+    return clamp(cat.x + (Math.random() < 0.5 ? -1 : 1) * cat.w, 60, view.w - 60);
+  }
+
+  const spawnQueue = [];
+  let spawnNext = 0;
+  function spawnKitten(id, type) {
+    if (settings.kittens === false || kittens.has(id) || spawnQueue.some((q) => q[0] === id)) return;
+    spawnQueue.push([id, type]);
+  }
+  function drainSpawns(t) {
+    while (spawnQueue.length && t >= spawnNext) {
+      const [id, type] = spawnQueue.shift();
+      if (reallySpawn(id, type)) { spawnNext = t + 0.18; break; }
+    }
+  }
+  function reallySpawn(id, type) {
+    if (settings.kittens === false) return false;
+    if (kittens.has(id)) return false;
+    const max = clamp(Number(settings.maxKittens) || 2, 1, 8);
+    if ([...kittens.values()].filter((k) => k.state !== 'home').length >= max) return false;
+    const slot = kittenSlot();
+    const tx = kittenSpot();
+    const skin = settings.kittenColors === 'match' ? settings.skin : COATS[hashStr(id) % COATS.length];
+    kittens.set(id, { id, type, slot, x: cat.x, y: env.floorY(), tx, state: 'pop', t0: now(), flip: tx > cat.x ? -1 : 1, walkPhase: 0, skin, seed: hashStr(id) % 1000, prop: KITTEN_PROP[type] || pick(['laptop', 'book', 'terminal', 'binoculars']), info: null, oopsUntil: 0 });
+    env.sfx('mew');
+    burst('spark', cat.x, cat.y - cat.h * 0.3, 8);
+    return true;
+  }
+
   function returnKitten(id, type) {
     let k = kittens.get(id);
     if (!k) k = [...kittens.values()].find((x) => x.state !== 'home' && x.type === type);
@@ -817,27 +861,56 @@
     k.state = 'home';
     k.t0 = now();
   }
+
+  function kittenOops(id) {
+    const k = kittens.get(id);
+    if (k) k.oopsUntil = now() + 1.6;
+  }
+
   function updateKittens(dt) {
+    const t = now();
+    drainSpawns(t);
+    // agents that didn't fit on screen: a kitten that frees up a slot lets the next one out
+    if (!spawnQueue.length) for (const a of status.agents || []) if ((a.state === 'working' || a.state === 'needs') && !kittens.has(a.id)) { spawnQueue.push([a.id, a.type]); break; }
     for (const k of kittens.values()) {
-      if (k.state === 'out') {
+      k.y = env.floorY();
+      if (k.state === 'pop') {
+        // pops out from behind her with a little arc
+        const u = (t - k.t0) / 0.55;
+        k.hopY = -Math.sin(Math.min(1, u) * Math.PI) * cat.h * 0.55;
+        k.x = lerp(cat.x, cat.x + (k.tx - cat.x) * 0.25, Math.min(1, u));
+        if (u >= 1) { k.state = 'out'; k.hopY = 0; burst('dust', k.x, k.y - 4, 3); }
+      } else if (k.state === 'out') {
         const dx = k.tx - k.x;
-        if (Math.abs(dx) < 4) { k.state = 'work'; k.flip = 1; }
-        else { k.x += Math.sign(dx) * Math.min(Math.abs(dx), 260 * dt); k.walkPhase += dt * 2.6; k.flip = dx > 0 ? -1 : 1; }
-        k.y = env.floorY();
+        if (Math.abs(dx) < 4) { k.state = 'work'; k.flip = 1; burst('dust', k.x, k.y - 4, 2); }
+        else { k.x += Math.sign(dx) * Math.min(Math.abs(dx), 240 * dt); k.walkPhase += dt * 2.8; k.flip = dx > 0 ? -1 : 1; }
+        k.hopY = -Math.abs(Math.sin(k.walkPhase * Math.PI)) * 5;
+      } else if (k.state === 'work') {
+        k.hopY = 0;
       } else if (k.state === 'home') {
         const dx = cat.x - k.x;
-        k.y = env.floorY();
-        if (Math.abs(dx) < 30) {
-          kittens.delete(k.id);
-          burst('heart', cat.x, cat.y - cat.h * 0.6, 2);
-          env.sfx('purr', 800);
+        if (Math.abs(dx) < cat.w * 0.32) {
+          // nuzzle, then tuck into her fur
+          if (!k.nuzzle) { k.nuzzle = t; env.sfx('purr', 800); burst('heart', (k.x + cat.x) / 2, cat.y - cat.h * 0.55, 2); }
+          if (t - k.nuzzle > 0.7) { kittens.delete(k.id); burst('spark', k.x, k.y - 30, 6); continue; }
+          k.hopY = 0;
           continue;
         }
         k.x += Math.sign(dx) * Math.min(Math.abs(dx), 300 * dt);
-        k.walkPhase += dt * 3;
+        k.walkPhase += dt * 3.2;
         k.flip = dx > 0 ? -1 : 1;
+        k.hopY = -Math.abs(Math.sin(k.walkPhase * Math.PI)) * 12; // happy bouncy trot
       }
     }
+  }
+
+  // which kitten (if any) is under a scene point
+  function kittenAt(x, y) {
+    for (const k of kittens.values()) {
+      const w = cat.w * 0.62;
+      if (Math.abs(x - k.x) < w * 0.32 && y < k.y + 4 && y > k.y - w * 0.85) return k;
+    }
+    return null;
   }
 
   // ============================================================ visitors --
@@ -1170,7 +1243,7 @@
   }
 
   function drawFx(t) {
-    const active = particles.length || sprites.length || smudges.length || kittens.size || visitors.length;
+    const active = particles.length || sprites.length || smudges.length || kittens.size || visitors.length || spawnQueue.length;
     if (!active && !fxDirty) return;
     fxDirty = !!active;
     const d = fxEl.width / view.w;
@@ -1183,11 +1256,41 @@
       drawMini(v.x, v.y, cat.w * 0.82, v.state === 'wave' ? 1 : (v.dir > 0 ? -1 : 1) * (v.state === 'out' ? -1 : 1), opts);
       nameTag(v.x, v.y - cat.h * 0.82, v.cat);
     }
+    const liveAgents = (status.agents || []).filter((a) => a.state === 'working' || a.state === 'needs').length;
+    const shown = [...kittens.values()].filter((k) => k.state !== 'home').length;
+    if (settings.kittens !== false && liveAgents > shown && shown > 0) {
+      const xs = [...kittens.values()].map((k) => k.x);
+      const left = cat.x > view.w / 2;
+      const px = clamp(left ? Math.min(...xs) - cat.w * 0.45 : Math.max(...xs) + cat.w * 0.45, 50, view.w - 50);
+      kittenPileX = px;
+      nameTag(px, view.h - 30, `+${liveAgents - shown} more 🐾`, false);
+    } else kittenPileX = null;
+    const tagOrder = new Map([...kittens.values()].sort((a, b) => a.x - b.x).map((k, i) => [k.id, i]));
     for (const k of kittens.values()) {
-      const walking = k.state !== 'work';
-      const opts = { skin: k.skin, t: t + k.x * 0.01, kitten: true, fat: 0, pose: walking ? 'walk' : 'sit', walkPhase: k.walkPhase, prop: !walking ? k.prop : undefined, raise: k.state === 'home' ? { side: 1, x: 236, y: 250, r: 18, hold: 'fish' } : undefined };
-      drawMini(k.x, k.y, cat.w * 0.62, k.flip, opts);
-      nameTag(k.x, k.y - cat.w * 0.62 * 0.86, k.type);
+      const walking = k.state === 'out' || k.state === 'home';
+      const info = k.info || {};
+      const needs = info.state === 'needs';
+      const oops = now() < k.oopsUntil;
+      const tt = t + k.seed;
+      const opts = { skin: k.skin, t: tt, kitten: true, fat: 0, pose: walking ? 'walk' : 'sit', walkPhase: k.walkPhase };
+      if (k.state === 'pop') Object.assign(opts, { eyes: 'wide', mouth: 'o' });
+      else if (k.state === 'home') Object.assign(opts, { raise: { side: 1, x: 236, y: 250, r: 18, hold: 'fish' }, eyes: k.nuzzle ? 'heart' : 'happy' });
+      else if (k.state === 'work') {
+        if (needs) Object.assign(opts, { state: 'needs', wave: 1 });
+        else if (oops) Object.assign(opts, { state: 'error' });
+        else Object.assign(opts, { prop: PROP_BY_ACT[info.activity] || k.prop, headTilt: Math.sin(tt * 0.7) * 0.08, look: { x: Math.sin(tt * 0.31) > 0.7 ? Math.sign(cat.x - k.x) * k.flip : 0, y: 0.2 } });
+      }
+      drawMini(k.x, k.y + (k.hopY || 0), cat.w * 0.62, k.flip, opts);
+      const mode = settings.kittenLabels || 'activity';
+      if (mode !== 'off' && k.state !== 'pop') {
+        let label = k.type;
+        const short = (d) => (d.length > 24 ? d.slice(0, 23) + '…' : d);
+        if (mode === 'activity' && k.state === 'work') label = needs ? `${k.type} · needs you!` : oops ? `${k.type} · oops` : info.detail ? `${k.type} · ${short(info.detail)}` : k.type;
+        if (k.state === 'home') label = `${k.type} · done ✓`;
+        // neighbours alternate label heights so long labels don't overlap
+        const lift = tagOrder.get(k.id) % 2 ? 18 : 0;
+        nameTag(k.x, k.y + (k.hopY || 0) - cat.w * 0.62 * 0.86 - lift, label.length > 38 ? label.slice(0, 37) + '…' : label, needs);
+      }
     }
     for (const s of sprites) {
       fctx.globalAlpha = s.alpha == null ? 1 : clamp(s.alpha, 0, 1);
@@ -1231,13 +1334,14 @@
     fctx.restore();
   }
 
-  function nameTag(x, y, text) {
+  function nameTag(x, y, text, alert) {
     if (!text) return;
     fctx.save();
     fctx.font = 'bold 11px "Trebuchet MS", sans-serif';
     const w = fctx.measureText(text).width + 12;
-    fctx.fillStyle = 'rgba(255, 250, 242, 0.95)';
-    fctx.strokeStyle = 'rgba(90, 45, 20, 0.7)';
+    x = clamp(x, w / 2 + 4, view.w - w / 2 - 4); // keep labels on screen
+    fctx.fillStyle = alert ? 'rgba(255, 236, 214, 0.98)' : 'rgba(255, 250, 242, 0.95)';
+    fctx.strokeStyle = alert ? '#E5484D' : 'rgba(90, 45, 20, 0.7)';
     fctx.lineWidth = 1.5;
     fctx.beginPath();
     if (fctx.roundRect) fctx.roundRect(x - w / 2, y - 16, w, 16, 8); else fctx.rect(x - w / 2, y - 16, w, 16);
@@ -1313,6 +1417,65 @@
     statusUntil = now() + (status.state === 'needs' || status.state === 'danger' ? 999 : 4);
   }
 
+  // ---- agents panel: review every subagent, live and recently finished
+  const agentsEl = $('agents');
+  let agentsFocus = null;
+  const openRows = new Set();
+  const fmtDur = (ms) => { const sec = Math.max(0, Math.round(ms / 1000)); return sec < 60 ? `${sec}s` : sec < 3600 ? `${Math.floor(sec / 60)}m ${sec % 60}s` : `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`; };
+  const STATE_ICON = { working: '🐾', needs: '🙋', done: '✅', error: '😵', stopped: '⏹️' };
+  const STATE_WORD = { working: 'working', needs: 'needs you', done: 'done', error: 'had trouble', stopped: 'stopped' };
+
+  function openAgents(focusId) {
+    agentsFocus = focusId || null;
+    if (focusId) openRows.add(focusId);
+    agentsEl.classList.remove('hidden');
+    renderAgents();
+    rosterEl.classList.add('hidden');
+  }
+  function hideAgents() { if (!agentsEl.classList.contains('hidden')) { agentsEl.classList.add('hidden'); agentsFocus = null; } }
+
+  let agentsRenderAt = 0;
+  let agentsRenderTimer = null;
+  function renderAgents() {
+    const wait = agentsRenderAt + 250 - performance.now();
+    if (wait > 0) { if (!agentsRenderTimer) agentsRenderTimer = setTimeout(() => { agentsRenderTimer = null; renderAgents(); }, wait); return; }
+    agentsRenderAt = performance.now();
+    const all = status.agents || [];
+    // live agents first (all of them), then the most recent finished ones
+    const list = all.filter((a) => a.state === 'working' || a.state === 'needs').concat(all.filter((a) => a.state !== 'working' && a.state !== 'needs').slice(0, 12)).slice(0, 80);
+    const active = list.filter((a) => a.state === 'working' || a.state === 'needs').length;
+    const needing = list.filter((a) => a.state === 'needs').length;
+    let html = `<div class="ag-head"><b>🐱 Agents</b><span>${active} active${needing ? ` · <b style="color:#E5484D">${needing} need you</b>` : ''} · ${list.length - active} recent</span><button class="ag-x" aria-label="Close">✕</button></div>`;
+    if (!list.length) html += '<div class="ag-empty">No subagents yet. When Claude sends a helper (Explore, Plan, …) a kitten appears here.</div>';
+    html += '<div class="ag-list">';
+    for (const a of list) {
+      const open = openRows.has(a.id) || a.id === agentsFocus;
+      const live = a.state === 'working' || a.state === 'needs';
+      const kit = kittens.get(a.id);
+      html += `<div class="ag-row ${esc(a.state)}${a.id === agentsFocus ? ' focus' : ''}" data-id="${esc(a.id)}">`;
+      html += `<div class="ag-top"><span class="ag-ico">${STATE_ICON[a.state] || '🐾'}</span><span class="ag-type">${esc(a.type)}</span><span class="ag-proj">${esc(a.project || '')}</span><span class="ag-time">${fmtDur(a.elapsed || 0)}</span></div>`;
+      html += `<div class="ag-what">${esc(a.description || (live ? a.detail : '') || '')}</div>`;
+      html += `<div class="ag-meta">${STATE_WORD[a.state] || a.state}${live && a.detail ? ' · ' + esc(a.detail) : ''} · ${a.tools || 0} tool${a.tools === 1 ? '' : 's'}${a.errors ? ` · ${a.errors} error${a.errors === 1 ? '' : 's'}` : ''}</div>`;
+      if (open) {
+        if (a.summary) html += `<div class="ag-sum">“${esc(a.summary)}”</div>`;
+        else if (live) html += `<div class="ag-sum dim">Still working… ${a.idleFor > 30000 ? `(quiet for ${fmtDur(a.idleFor)})` : ''}</div>`;
+        if (a.lastError) html += `<div class="ag-sum err">Last error: ${esc(a.lastError)}</div>`;
+        if (kit) html += '<div class="ag-sum dim">Its kitten is on your screen (click it to come back here).</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    agentsEl.innerHTML = html;
+  }
+  agentsEl.addEventListener('click', (e) => {
+    if (e.target.closest('.ag-x')) { hideAgents(); return; }
+    const row = e.target.closest('.ag-row');
+    if (!row) return;
+    const id = row.dataset.id;
+    if (openRows.has(id)) openRows.delete(id); else openRows.add(id);
+    renderAgents();
+  });
+
   function renderRoster() {
     const ss = status.sessions || [];
     let html = `<h4>${esc(settings.name)} is watching ${ss.length || 'no'} session${ss.length === 1 ? '' : 's'}</h4>`;
@@ -1320,7 +1483,7 @@
       const pct = s.context && s.context.window ? Math.round((s.context.tokens / s.context.window) * 100) : 0;
       html += `<div class="row"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotColor(s.state)}"></span><span class="name">${esc(s.project)}</span><span class="what">${esc(s.detail || s.state)}</span></div>`;
       html += `<div class="meter" title="context ${pct}%"><i style="width:${clamp(pct, 2, 100)}%"></i></div>`;
-      if (s.subagents && s.subagents.length) html += `<div class="row" style="padding-left:16px"><span class="what">🐱 ${s.subagents.map((k) => esc(k.type)).join(', ')}</span></div>`;
+      for (const k of (s.subagents || []).slice(0, 4)) html += `<div class="row" style="padding-left:16px"><span class="what">${k.state === 'needs' ? '🙋' : '🐱'} ${esc(k.type)} · ${esc(k.detail || 'working')}</span></div>`;
     }
     html += `<div class="foot">🐟 ${stats.fish} fish · 🔥 ${stats.streakDays}-day streak · ✓ ${stats.today ? stats.today.tasks : 0} today</div>`;
     rosterEl.innerHTML = html;
@@ -1389,6 +1552,7 @@
       ['nap', status.state === 'sleep' || (director.cur && director.cur.name === 'nap') ? '☀️ Wake up' : '😴 Nap'],
       ['box', '📦 Sit in a box'],
       ['diary', '📔 Today’s diary'],
+      ['agents', `🐱 Agents (${(status.agents || []).filter((a) => a.state === 'working' || a.state === 'needs').length} active)`],
       ...(env.sessionNeeding() && settings.desktopAwareness ? [['goto', `🪟 Take me to ${esc(env.sessionNeeding().project)}`]] : []),
       ['hr'],
       ['dnd', settings.dnd ? '🔔 Turn off Do Not Disturb' : '🔕 Do Not Disturb'],
@@ -1423,6 +1587,7 @@
     else if (id === 'play') { const ok = ['yarn', 'butterfly', 'zoomies', 'dance', 'tailChase', 'roll'].filter((n) => !B[n].cond || B[n].cond(env)); director.play(pick(ok.length ? ok : ['dance']), {}, true); }
     else if (id === 'nap') director.play(director.cur && director.cur.name === 'nap' ? 'shakeFur' : 'nap', {}, true);
     else if (id === 'box') director.play('box', {}, true);
+    else if (id === 'agents') openAgents();
     else if (id === 'diary') api.ask('diary').then((a) => { director.play('meowQuiet', {}, true); say(a, Math.min(14000, 3000 + a.length * 45)); });
     else if (id === 'goto') { const w = env.sessionNeeding(); if (w) takeMeThere(w.project); }
     else if (id === 'dnd') api.saveSettings({ dnd: !settings.dnd });
@@ -1455,8 +1620,13 @@
   };
   B.feastPreview = Object.assign({}, B.feast, { dur: 4, while: undefined });
   B.meowQuiet = { pri: 3, dur: 1.2, frame: (e, k) => ({ mouth: k < 0.4 ? 'meow' : 'w', ears: 'perk' }) };
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { hideMenu(); hideAsk(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { hideMenu(); hideAsk(); hideAgents(); } });
   document.addEventListener('pointerdown', (e) => {
+    const kk = e.target !== catEl && !agentsEl.contains(e.target) ? kittenAt(e.screenX - view.ox, e.screenY - view.oy) : null;
+    if (kk) { openAgents(kk.id); env.sfx('mew', 400); kk.oopsUntil = 0; return; }
+    const sx = e.screenX - view.ox, sy = e.screenY - view.oy;
+    if (kittenPileX != null && Math.abs(sx - kittenPileX) < 50 && Math.abs(sy - (view.h - 38)) < 16) { openAgents(); return; }
+    if (!agentsEl.contains(e.target) && e.target !== catEl) hideAgents();
     if (!menuEl.contains(e.target)) hideMenu();
     if (!askEl.contains(e.target) && e.target !== catEl) hideAsk();
   });
@@ -1542,7 +1712,7 @@
 
   function updateHover(t) {
     if (hover.on && !drag) {
-      if (t - hover.since > 0.6 && rosterEl.classList.contains('hidden')) { renderRoster(); rosterEl.classList.remove('hidden'); }
+      if (t - hover.since > 0.6 && rosterEl.classList.contains('hidden') && agentsEl.classList.contains('hidden')) { renderRoster(); rosterEl.classList.remove('hidden'); }
       if (t - hover.since > 1.4 && (!director.cur || director.cur.def.pri < 2)) director.play('purr');
     }
   }
@@ -1588,7 +1758,7 @@
       }
     }
     const side = cat.x > view.w / 2 ? -1 : 1;
-    for (const el of [rosterEl, permEl, askEl]) {
+    for (const el of [rosterEl, permEl, askEl, agentsEl]) {
       if (el.classList.contains('hidden')) continue;
       const r = el.getBoundingClientRect();
       const px = side > 0 ? cat.x + cat.w * 0.42 : cat.x - cat.w * 0.42 - r.width;
@@ -1612,7 +1782,12 @@
         const half = (a.bodyRx + 30) * cat.k;
         rects.push({ x: Math.round(cat.x - half), y: Math.round(top), w: Math.round(half * 2), h: Math.round(cat.y - top) });
       }
-      for (const el of [permEl, menuEl, askEl, ...(bubbleEl.classList.contains('interactive') ? [bubbleEl] : [])]) {
+      if (kittenPileX != null) rects.push({ x: Math.round(kittenPileX - 50), y: Math.round(view.h - 54), w: 100, h: 32 });
+      for (const k of kittens.values()) {
+        const w = cat.w * 0.62;
+        rects.push({ x: Math.round(k.x - w * 0.32), y: Math.round(k.y - w * 0.85), w: Math.round(w * 0.64), h: Math.round(w * 0.85) });
+      }
+      for (const el of [permEl, menuEl, askEl, agentsEl, ...(bubbleEl.classList.contains('interactive') ? [bubbleEl] : [])]) {
         if (el.classList.contains('hidden')) continue;
         const r = el.getBoundingClientRect();
         rects.push({ x: Math.round(r.left + vp.x), y: Math.round(r.top + vp.y), w: Math.round(r.width), h: Math.round(r.height) });
@@ -1695,15 +1870,19 @@
     if ((s.state === 'idle' || s.state === 'sleep') && prev.state !== s.state) statusUntil = Math.min(statusUntil, now() + 1.5);
     // kittens whose subagent vanished (session ended, Ctrl+C) go home instead of staying forever
     const live = new Set();
-    for (const ss of s.sessions || []) for (const k of ss.subagents || []) live.add(k.id);
+    for (const ss of s.sessions || []) for (const k of ss.subagents || []) { live.add(k.id); if (!kittens.has(k.id) && settings.kittens !== false) spawnKitten(k.id, k.type); const kit = kittens.get(k.id); if (kit) kit.info = k; }
+    if (!agentsEl.classList.contains('hidden')) renderAgents();
     for (const k of kittens.values()) {
       if (k.state !== 'home' && !String(k.id).startsWith('preview-') && !live.has(k.id) && now() - k.t0 > 5) { k.state = 'home'; k.t0 = now(); }
+      if (settings.kittens === false && k.state !== 'home') { k.state = 'home'; k.t0 = now(); }
     }
   }
 
   function onFx(fx) {
     if (fx.type === 'kitten-spawn') { spawnKitten(fx.agentId, fx.agentType); director.play('perk'); return; }
-    if (fx.type === 'kitten-return') { returnKitten(fx.agentId, fx.agentType); return; }
+    if (fx.type === 'kitten-return') { returnKitten(fx.agentId, fx.agentType); if (!agentsEl.classList.contains('hidden')) renderAgents(); return; }
+    if (fx.type === 'kitten-oops') { kittenOops(fx.agentId); return; }
+    if (fx.type === 'open-agents') { openAgents(); return; }
     if (fx.type === 'cafe-visit') { addVisitor(fx); return; }
     if (fx.type === 'achievement') { director.play('achievement', fx, true); return; }
     if (fx.type === 'session-start') { director.play('wakeUp', { project: fx.project, prev: status.state }); return; }
@@ -1732,7 +1911,7 @@
   // hugs the cat (plus room for bubbles) and only grows when the scene needs it.
   function updateViewport(t) {
     if (vp.pending) return;
-    const big = kittens.size > 0 || visitors.length > 0 || sprites.length > 0 || smudges.length > 0 || cat.mode === 'drag' || cat.mode === 'air' || cat.mode === 'hop' || particles.some((p) => p.kind === 'confetti' || p.kind === 'dream');
+    const big = !agentsEl.classList.contains('hidden') || visitors.length > 0 || sprites.length > 0 || smudges.length > 0 || cat.mode === 'drag' || cat.mode === 'air' || cat.mode === 'hop' || particles.some((p) => p.kind === 'confetti' || p.kind === 'dream');
     let want;
     if (big) {
       vp.compactSince = 0;
@@ -1741,13 +1920,16 @@
       if (!vp.compactSince) vp.compactSince = t;
       const pad = Math.max(340, 0.42 * cat.w + 380); // perm card / Ask box sit beside her
       const box = { x: cat.x - pad, y: cat.y - cat.h - 330, x2: cat.x + pad, y2: cat.y + 8 };
+      for (const k of kittens.values()) { box.x = Math.min(box.x, k.x - cat.w * 0.5, k.tx - cat.w * 0.5); box.x2 = Math.max(box.x2, k.x + cat.w * 0.5, k.tx + cat.w * 0.5); }
+      if (kittenPileX != null) { box.x = Math.min(box.x, kittenPileX - 70); box.x2 = Math.max(box.x2, kittenPileX + 70); }
+      box.x = Math.max(0, box.x); box.x2 = Math.min(view.w, box.x2);
       const inside = box.x >= vp.x - 2 && box.x2 <= vp.x + vp.w + 2 && box.y >= vp.y - 2 && box.y2 <= vp.y + vp.h + 2;
       const isFull = vp.w >= view.w && vp.h >= view.h;
       if (inside && !(isFull && t - vp.compactSince > 1.2)) return;
       if (isFull && t - vp.compactSince < 1.2) return; // let effects finish before shrinking
-      const w = Math.min(view.w, pad * 2 + 160);
+      const w = Math.min(view.w, Math.max(pad * 2 + 160, box.x2 - box.x + 40));
       const hh = Math.min(view.h, cat.h + 330 + 8 + 60);
-      want = { x: clamp(cat.x - w / 2, 0, view.w - w), y: clamp(box.y - 30, 0, view.h - hh), w, h: hh };
+      want = { x: clamp((box.x + box.x2) / 2 - w / 2, 0, view.w - w), y: clamp(box.y - 30, 0, view.h - hh), w, h: hh };
     }
     if (Math.abs(want.x - vp.x) < 1 && Math.abs(want.y - vp.y) < 1 && Math.abs(want.w - vp.w) < 1 && Math.abs(want.h - vp.h) < 1) return;
     vp.pending = true;
@@ -1854,9 +2036,12 @@
         emit('status', Object.assign({ state, activity, detail: detail || state, project: 'demo', context: { tokens: (ctxPct || 20) * 2000, window: 200000 }, needsFor: 0, subagents: 0, sessions: [{ id: 'd', project: 'demo', state, activity, detail: detail || state, context: { tokens: (ctxPct || 20) * 2000, window: 200000 }, subagents: [], pending: { summary: 'Run npm test' } }] }, extra || {}));
       },
       fx(type, data) { emit('fx', Object.assign({ type, project: 'demo' }, data || {})); },
+      agents(list) { emit('status', { state: 'working', activity: 'delegating', detail: 'Sending helpers', project: 'demo', context: { tokens: 40000, window: 200000 }, sessions: [{ id: 'd', project: 'demo', state: 'working', detail: 'Sending helpers', context: { tokens: 40000, window: 200000 }, subagents: list.filter((a) => a.state === 'working' || a.state === 'needs') }], agents: list }); },
       perm() { emit('permission', { id: 'p1', tool: 'Bash', input: { command: 'rm -rf build && npm run build' }, project: 'demo', timeout: 25 }); },
       play(name) { director.play(name, {}, true); },
       behaviors: () => Object.keys(B),
+      openAgents: (id) => openAgents(id),
+      kittens: () => [...kittens.values()].map((k) => ({ id: k.id, state: k.state, x: Math.round(k.x), info: k.info && k.info.state })),
       inspect: () => ({ x: Math.round(cat.x), homeX: Math.round(cat.homeX), mode: cat.mode, perch: !!cat.perch, behaviour: director.cur ? director.cur.name : null, sprites: sprites.map((x) => x.kind + (x.fading ? '(fading)' : '')) }),
     };
     return {

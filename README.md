@@ -49,7 +49,8 @@ There are a few Claude Code desktop pets around. Arshia, your Chonky Cat, does t
 | | Feature | What happens |
 |---|---|---|
 | 🍔 | **Context-window belly** | Arshia literally gets chubbier as your context window fills. Run `/compact` and she munches through the conversation, then *burps* and slims down. |
-| 🐱 | **Subagent kittens** | Every subagent Claude starts pops out as a little kitten with a name tag (`Explore`, `Plan`…) that walks off and works on its own tiny laptop, then trots home carrying a fish when it’s done. |
+| 🐱 | **Subagent kittens** | Every subagent Claude starts pops out from behind Arshia as a kitten in a mixed-coat litter, with a name tag that shows what it is doing (`Explore · Reading cart.ts`). It holds the right prop for its current tool. It waves a red "!" when it needs your permission, gets dizzy when a tool fails, and trots home with a fish to nuzzle her when it is done. Two kittens are on screen by default; the rest wait in a "+N more" badge. |
+| 📋 | **Agents panel** | Right-click, then *Agents*, click any kitten, or run `npx chonkycat agents` to review every subagent: its task, live status (working, needs you, done, had trouble, stopped), current tool, tool count, errors, elapsed time and final summary. Tested with 30 agents at once. |
 | 🙀 | **Danger sense** | Before `rm -rf`, `git push --force`, `git reset --hard`, `DROP TABLE`, `curl … \| sh` and friends, her fur puffs up and she hisses. The guard also makes Claude Code *ask* before those commands, even in auto-accept mode. It reads commands structurally, so text inside quotes (commit messages, grep patterns, file names) doesn't set it off. For headless `claude -p` or CI runs, where nobody can answer, turn the guard off in Settings. |
 | 🐾 | **Paw approval** *(opt-in)* | Approve or deny Claude’s permission requests from a card next to Arshia. Risky commands need two clicks. Don’t answer and Claude simply asks in the terminal as usual. |
 | 🪟 | **She comes to find you** | When a session has been waiting on you for a while, Arshia runs over to that terminal/editor window, sits on its title bar and taps on the glass — leaving little paw smudges. |
@@ -124,6 +125,7 @@ Right-click Arshia → **Settings…** (or the tray icon). Everything saves inst
 | Desktop awareness, perching, run to window | on | |
 | Break guardian | 90 min | |
 | Cat café | off | Room code + display name |
+| Subagent kittens | on, 2 on screen | Labels (name + activity / name / off), coats (mixed / match), max 1–8 |
 | Wander around | on | Strolls and perching; she always walks back to her spot (drag her to move it) |
 | Wardrobe | no hat | Hats unlock through achievements |
 | System notifications | when hidden | Off / only when the cat is hidden / always |
@@ -136,6 +138,7 @@ npx chonkycat            # start (same as `start`)
 npx chonkycat stop
 npx chonkycat status     # is she awake? + stats
 npx chonkycat demo       # plays every Claude Code reaction once
+npx chonkycat agents     # review every subagent and its status
 npx chonkycat doctor     # checks Node, Electron, hooks, connectivity
 npx chonkycat install-hooks / uninstall-hooks
 ```

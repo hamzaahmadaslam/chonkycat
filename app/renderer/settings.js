@@ -5,9 +5,9 @@
   const $ = (id) => document.getElementById(id);
   let s = null;
 
-  const BOOL = ['roam', 'randomAnimations', 'cursorPlay', 'seasonal', 'showStatusLine', 'sounds', 'speakSummaries', 'pawApproval', 'dangerGuard', 'autoStart', 'dnd', 'desktopAwareness', 'perchOnWindows', 'runToWindow', 'breakGuardian', 'launchAtLogin'];
-  const NUM = ['size', 'fps', 'volume', 'animationFrequency', 'pawApprovalTimeout', 'breakMinutes'];
-  const TEXT = ['name', 'hotkey', 'voice', 'notifications'];
+  const BOOL = ['kittens', 'roam', 'randomAnimations', 'cursorPlay', 'seasonal', 'showStatusLine', 'sounds', 'speakSummaries', 'pawApproval', 'dangerGuard', 'autoStart', 'dnd', 'desktopAwareness', 'perchOnWindows', 'runToWindow', 'breakGuardian', 'launchAtLogin'];
+  const NUM = ['maxKittens', 'size', 'fps', 'volume', 'animationFrequency', 'pawApprovalTimeout', 'breakMinutes'];
+  const TEXT = ['name', 'hotkey', 'voice', 'notifications', 'kittenLabels', 'kittenColors'];
 
   const PREVIEWS = [
     ['hello', '👋 Hello'], ['session-start', '🌅 New session'], ['prompt', '💭 Prompt'], ['git-commit', '📦 Commit'], ['git-push', '🚀 Push'],
@@ -54,6 +54,7 @@
     for (const k of TEXT) $(k).addEventListener('change', (e) => save({ [k]: e.target.value }));
     const cafe = () => save({ cafe: { enabled: $('cafeEnabled').checked, room: $('cafeRoom').value.trim(), displayName: $('cafeName').value.trim(), shareProject: $('cafeProject').checked } });
     ['cafeEnabled', 'cafeRoom', 'cafeName', 'cafeProject'].forEach((id) => $(id).addEventListener('change', cafe));
+    $('testKitten').addEventListener('click', () => api.previewFx('kitten-spawn'));
     $('resetName').addEventListener('click', () => { $('name').value = 'Arshia'; save({ name: 'Arshia' }); });
   }
 

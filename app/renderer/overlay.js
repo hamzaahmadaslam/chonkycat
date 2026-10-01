@@ -72,7 +72,7 @@
     toast(text, ms) { toast(text, ms); },
     burst(kind, x, y, n, o) { burst(kind, x, y, n, o); },
     sprite(s) { s.born = now(); sprites.push(s); return s; },
-    squash(x, y) { cat.sq0 = { x, y }; cat.sqT = 0; },
+    squash(x, y) { cat.sq0 = { x, y }; cat.sqT = 0; kickJiggle((x - 1) * 160); },
     walkTo(x, speed) {
       const dx = x - cat.x;
       if (Math.abs(dx) < 4) { cat.walking = false; return true; }
@@ -384,6 +384,7 @@
       p.wait = true;
       api.foregroundWindow().then((w) => {
         p.wait = false;
+        if (!stillMine(p)) { p.skip = true; return; }
         if (!w || w.y < 140 || w.w < 320 || w.y > e.view.h - 120) { p.skip = true; return; }
         const x = clamp(e.cat.x, w.x + 70, w.x + w.w - 70);
         p.win = w;
@@ -415,7 +416,7 @@
   };
   B.chaseCursor = {
     pri: 2, dur: 3,
-    start(e, p) { p.tx = clamp(e.cursor.x, 60, e.view.w - 60); p.phase = 0; },
+    start(e, p) { p.tx = cat.perch ? clamp(e.cursor.x, cat.perch.x + 40, cat.perch.x + cat.perch.w - 40) : clamp(e.cursor.x, 60, e.view.w - 60); p.phase = 0; },
     frame(e, k, s, p) {
       if (p.phase === 0) {
         if (s > 1.3) { p.phase = 1; e.hopTo(p.tx, e.groundY(), 0.55, 110, cat.perch ? 'perch' : 'floor'); e.sfx('mrrp'); }
@@ -523,7 +524,8 @@
       p.sNeeds = e.sessionNeeding();
       if (!permVisible() && !e.quiet()) {
         const what = p.sNeeds && p.sNeeds.pending ? p.sNeeds.pending.summary : (p.sNeeds && p.sNeeds.detail) || 'Claude needs you';
-        e.say(`<b>${esc((p.sNeeds && p.sNeeds.project) || 'Claude')}</b> needs you:\n${esc(what)}`, 9000, { html: true });
+        const proj = (p.sNeeds && p.sNeeds.project) || '';
+        e.say(`<b>${esc(proj || 'Claude')}</b> needs you:\n${esc(what)}`, 12000, { html: true, actions: e.settings.desktopAwareness ? [{ label: 'Take me there →', run: () => takeMeThere(proj) }] : null });
       }
       e.sfx('meow');
       p.phase = 0;
@@ -534,10 +536,11 @@
       if (p.phase === 0 && s > 12 && e.settings.runToWindow && e.settings.desktopAwareness && !e.quiet()) {
         p.phase = 1;
         api.sessionWindow(p.sNeeds && p.sNeeds.project).then((w) => {
+          if (!stillMine(p)) return;
           if (!w || w.w < 200) { p.phase = 3; return; }
           const x = clamp(w.x + w.w - 140, 80, e.view.w - 80);
           if (w.y > 140 && w.y < e.view.h - 160) {
-            cat.perch = { id: w.id, x: w.x, y: w.y, w: w.w, h: w.h };
+            cat.perch = { id: w.id, x: w.x, y: w.y, w: w.w, h: w.h, pinned: true };
             e.hopTo(x, w.y, 0.9, 160, 'perch');
           } else {
             p.walkX = x;
@@ -612,7 +615,7 @@
   };
   B.goodbye = {
     pri: 3, dur: 2.2,
-    start(e, p) { if (!e.quiet()) e.say(`Bye, ${esc(p.project || 'session')}!`, 1800); },
+    start(e, p) { if (!e.quiet()) e.say(`Bye, ${p.project || 'session'}!`, 1800); },
     frame: () => ({ wave: 1, eyes: 'happy', mouth: 'smile' }),
   };
   B.nudge = {
@@ -650,10 +653,27 @@
     },
     end() { hideBubble(); },
   };
+  B.hungry = {
+    idle: true, weight: 6, pri: 1, dur: 7,
+    cond: (e) => (e.stats.hunger || 0) > 0.72,
+    start(e) { e.sfx('meow'); if (!e.quiet()) e.say(e.stats.fish > 0 ? 'My bowl is empty… right-click me → Feed a fish? 🐟' : 'My bowl is empty… finish a Claude task to earn me a fish 🐟', 3600); },
+    frame: (e, k, s) => ({ prop: 'bowl', full: 0, look: { x: s % 3 < 1.5 ? -0.9 : 0, y: s % 3 < 1.5 ? 0.8 : 0 }, eyes: s % 3 < 1.5 ? 'open' : 'wide', mouth: s % 3 > 2.4 ? 'meow' : 'w', ears: 'back' }),
+  };
+  B.achievement = {
+    pri: 5, dur: 4.5,
+    start(e, p) {
+      e.sfx('tada');
+      e.burst('confetti', e.cat.x, e.headTopY(), 50);
+      e.toast(`🏆 ${p.label}: ${p.hat} unlocked!`, 3800);
+      if (!e.quiet()) e.say(`New hat! Find it in Settings → Wardrobe. (${p.desc})`, 4200);
+    },
+    frame: (e, k, s, p) => ({ hat: p.hat, eyes: 'star', mouth: 'smile', dy: -Math.abs(Math.sin(s * 6)) * 10, ears: 'perk' }),
+  };
   B.eatFish = {
     pri: 4, dur: 3.6,
     start(e, p) {
       api.feed().then((ok) => {
+        if (!stillMine(p)) return;
         p.ok = ok;
         if (!ok && !e.quiet()) e.say('No fish left… finish a Claude task to earn one!', 2600);
         else e.sfx('munch');
@@ -697,6 +717,9 @@
     frame: () => ({ eyes: 'dizzy', mouth: 'wavy' }),
   };
 
+  // Is behaviour state p still the one running (and is she not being dragged)?
+  function stillMine(p) { return !!director.cur && director.cur.p === p && cat.mode !== 'drag'; }
+
   // Map hook reactions to behaviours.
   const FX_TO_BEHAVIOR = {
     'session-start': 'wakeUp', prompt: 'perk', 'git-commit': 'stamp', 'git-push': 'rocket', 'tests-pass': 'celebrate',
@@ -717,7 +740,7 @@
       p = Object.assign({}, p || {});
       if (this.cur && !force) {
         if ((this.cur.def.pri || 0) > (def.pri || 0)) {
-          if ((def.pri || 0) >= 3) this.queue.push([name, p]);
+          if ((def.pri || 0) >= 3 && !this.queue.some((q) => q[0] === name)) { this.queue.push([name, p, now()]); if (this.queue.length > 3) this.queue.shift(); }
           return;
         }
         if (this.cur.name === name && def.while) return; // already running
@@ -726,7 +749,7 @@
       this.cur = { name, def, p, t0: now() };
       if (def.start) def.start(env, p);
     },
-    queueNext(name) { this.queue.push([name, {}]); },
+    queueNext(name) { this.queue.push([name, {}, now()]); },
     end() {
       if (!this.cur) return;
       const c = this.cur;
@@ -735,6 +758,7 @@
     },
     update(t) {
       if (cat.mode === 'drag') return { eyes: 'wide', mouth: 'o', sy: 1.12, sx: 0.94, ears: 'back', paws: undefined };
+      while (this.queue.length && t - this.queue[0][2] > 6) this.queue.shift(); // stale reactions are dropped
       if (!this.cur && this.queue.length) { const [n, p] = this.queue.shift(); this.play(n, p); }
       if (!this.cur) {
         const h = wantsHome(t);
@@ -782,7 +806,7 @@
     const side = n % 2 ? -1 : 1;
     const slot = Math.floor(n / 2);
     const tx = clamp(cat.x + side * (cat.w * 0.85 + slot * cat.w * 0.55), 60, view.w - 60);
-    kittens.set(id, { id, type, x: cat.x, y: env.groundY(), tx, state: 'out', t0: now(), flip: side > 0 ? -1 : 1, walkPhase: 0, skin: settings.skin, prop: KITTEN_PROP[type] || pick(['laptop', 'book', 'terminal', 'binoculars']) });
+    kittens.set(id, { id, type, x: cat.x, y: env.floorY(), tx, state: 'out', t0: now(), flip: side > 0 ? -1 : 1, walkPhase: 0, skin: settings.skin, prop: KITTEN_PROP[type] || pick(['laptop', 'book', 'terminal', 'binoculars']) });
     env.sfx('pop');
     burst('spark', cat.x, cat.y - cat.h * 0.3, 6);
   }
@@ -799,10 +823,10 @@
         const dx = k.tx - k.x;
         if (Math.abs(dx) < 4) { k.state = 'work'; k.flip = 1; }
         else { k.x += Math.sign(dx) * Math.min(Math.abs(dx), 260 * dt); k.walkPhase += dt * 2.6; k.flip = dx > 0 ? -1 : 1; }
-        k.y = env.groundY();
+        k.y = env.floorY();
       } else if (k.state === 'home') {
         const dx = cat.x - k.x;
-        k.y = env.groundY();
+        k.y = env.floorY();
         if (Math.abs(dx) < 30) {
           kittens.delete(k.id);
           burst('heart', cat.x, cat.y - cat.h * 0.6, 2);
@@ -906,6 +930,79 @@
     }
   }
 
+  // ============================================================ dynamics --
+  // Secondary motion with damped springs (follow-through & overlapping action): ears,
+  // tail, head and belly lag, overshoot and settle instead of snapping between poses.
+  // Targets come from real cat body language: tail high + hooked tip = happy, tail low =
+  // anxious, flicking tip + forward ears + big pupils = hunting, ears flat = scared.
+  const spring = (x) => ({ x, v: 0 });
+  const dyn = { ear: spring(0), earW: spring(0), tailUp: spring(0.75), flick: spring(0), lag: spring(0), sway: spring(1), pupil: spring(1), lid: spring(0), hx: spring(0), hy: spring(0), jig: spring(0), lidOut: 0 };
+  const blinker = { next: now() + 2, start: -10, double: false };
+  const saccade = { x: 0, y: 0, next: now() + 1 };
+  const EAR_ANGLE = { flat: -1, back: -0.5, up: 0, perk: 1 };
+  const HUNT = ['chaseCursor', 'butterfly', 'yarn', 'birdWatch'];
+  const CONTENT = ['purr', 'slowBlink', 'knead', 'loaf', 'groom', 'nap'];
+
+  function stepSpring(sp, target, k, d, dt) {
+    const a = k * (target - sp.x) - d * sp.v;
+    sp.v += a * dt;
+    sp.x += sp.v * dt;
+  }
+
+  function moodTargets() {
+    const st = status.state;
+    const b = director.cur ? director.cur.name : '';
+    let m = { ear: 0, tailUp: 0.75, flick: 0, pupil: 1, lid: 0, sway: 1 };
+    if (st === 'working') m = { ear: 0.35, tailUp: 0.62, flick: 0, pupil: 1, lid: 0.12, sway: 0.7 };
+    else if (st === 'thinking') m = { ear: 0.2, tailUp: 0.7, flick: 0.15, pupil: 1.05, lid: 0.05, sway: 0.5 };
+    else if (st === 'needs') m = { ear: 1, tailUp: 1, flick: 0.1, pupil: 1.25, lid: 0, sway: 1.4 };
+    else if (st === 'danger') m = { ear: -1, tailUp: 0.9, flick: 0, pupil: 1.5, lid: 0, sway: 0 };
+    else if (st === 'error') m = { ear: -0.5, tailUp: 0.2, flick: 0.4, pupil: 1.1, lid: 0.1, sway: 0.4 };
+    else if (st === 'done') m = { ear: 0.4, tailUp: 1, flick: 0, pupil: 0.85, lid: 0, sway: 1.3 };
+    else if (st === 'sleep') m = { ear: -0.2, tailUp: 0.3, flick: 0, pupil: 0.8, lid: 0, sway: 0.3 };
+    if (HUNT.includes(b)) Object.assign(m, { ear: 1, tailUp: 0.25, flick: 1, pupil: 1.55, lid: 0 });
+    if (CONTENT.includes(b)) Object.assign(m, { ear: 0, tailUp: 0.85, pupil: 0.75, lid: 0.3 });
+    if (b === 'hungry') Object.assign(m, { ear: -0.4, tailUp: 0.35, pupil: 1.2 });
+    if (b === 'cupKnock') Object.assign(m, { tailUp: 0.5, flick: 0.5, lid: 0.35 });
+    if (b === 'hello' || b === 'wakeUp' || b === 'achievement' || b === 'celebrate') Object.assign(m, { ear: 0.6, tailUp: 1, pupil: 1.15 });
+    if ((stats.mood || 0.6) < 0.35) { m.ear = Math.min(m.ear, -0.3); m.tailUp = Math.min(m.tailUp, 0.45); }
+    if (ov.ears && EAR_ANGLE[ov.ears] != null) m.ear = EAR_ANGLE[ov.ears];
+    return m;
+  }
+
+  function updateDynamics(t, dt) {
+    dt = Math.min(dt, 0.05);
+    const m = moodTargets();
+    const curious = cursor.inside && t - cursor.lastMove < 0.6 && Math.hypot(cursor.x - cat.x, cursor.y - cat.y) < 420;
+    stepSpring(dyn.ear, m.ear + (curious ? 0.25 : 0), 60, 9, dt);
+    stepSpring(dyn.tailUp, m.tailUp, 22, 7, dt);
+    stepSpring(dyn.flick, m.flick, 30, 10, dt);
+    stepSpring(dyn.sway, m.sway, 20, 8, dt);
+    stepSpring(dyn.pupil, m.pupil + (curious ? 0.18 : 0), 40, 10, dt);
+    // the tail streams out behind her when she moves, the head bobs against vertical motion
+    const speed = cat.walking ? cat.walkSpeed : cat.mode === 'air' ? Math.abs(cat.vx) : 0;
+    stepSpring(dyn.lag, clamp(speed * 0.03, 0, 26), 30, 6, dt);
+    const vy = cat.mode === 'air' ? cat.vy : 0;
+    stepSpring(dyn.hy, clamp(vy * 0.006, -9, 9), 140, 9, dt);
+    stepSpring(dyn.hx, cat.walking ? Math.sin(cat.walkPhase * TAU) * 2 : 0, 140, 9, dt);
+    stepSpring(dyn.jig, 0, 170, 4, dt); // underdamped: the belly wobbles after a landing
+    stepSpring(dyn.earW, 0, 110, 5, dt);
+    // blinks: quick close, slower open; sometimes a double blink
+    if (t > blinker.next) { blinker.start = t; blinker.double = Math.random() < 0.2; blinker.next = t + rand(2.2, 6.5); }
+    const shape = (u) => (u < 0 ? 0 : u < 0.07 ? u / 0.07 : u < 0.18 ? 1 - (u - 0.07) / 0.11 : 0);
+    let blinkLid = shape(t - blinker.start);
+    if (blinker.double) blinkLid = Math.max(blinkLid, shape(t - blinker.start - 0.26));
+    // upper lids follow the gaze down a little
+    const gazeLid = cat.look.y > 0.3 ? (cat.look.y - 0.3) * 0.5 : 0;
+    stepSpring(dyn.lid, Math.max(m.lid, gazeLid), 90, 14, dt);
+    dyn.lidOut = clamp(Math.max(dyn.lid.x, blinkLid), 0, 1);
+    // little eye darts while nothing in particular holds her attention
+    if (t > saccade.next) { saccade.next = t + rand(0.6, 2.4); saccade.x = rand(-0.28, 0.28); saccade.y = rand(-0.18, 0.12); }
+  }
+
+  // landing, bumps and boops make the belly and ears wobble
+  function kickJiggle(v) { dyn.jig.v += v; dyn.earW.v += v * 0.5; }
+
   // ============================================================ physics --
   function updateCat(t, dt) {
     cat.walking = false;
@@ -960,6 +1057,7 @@
     const c = status.context || { tokens: 0, window: 200000 };
     const target = status.sessions && status.sessions.length ? clamp((c.tokens / (c.window || 200000)) * 1.15, 0.06, 1) : 0.15;
     cat.fat += (clamp(target + cat.fatBoost, 0, 1.15) - cat.fat) * Math.min(1, dt * (cat.fatBoost ? 0.8 : 1.6));
+    if (!Number.isFinite(cat.fat)) cat.fat = 0.2;
   }
 
   // Perched cats check that their window is still where they left it.
@@ -970,9 +1068,11 @@
     api.foregroundWindow().then((w) => {
       if (cat.mode !== 'perch' || !cat.perch) return;
       const p = cat.perch;
-      if (!w || w.id !== p.id) {
-        // window lost focus — it may be covered now; hop down to stay visible
-        director.play('hopDown', {}, true);
+      if (!w) return; // our own overlay has focus (you're petting her): stay put
+      if (w.id !== p.id) {
+        // her window lost focus and may be covered: hop down, unless she's there on purpose
+        if (p.pinned) return;
+        if (!director.cur || (director.cur.def.pri || 0) <= 1) director.play('hopDown', {}, true);
         return;
       }
       const dx = w.x - p.x, dy = w.y - p.y;
@@ -1004,6 +1104,7 @@
     }
     if (st === 'needs') o.wave = 1;
     if (st === 'sleep') { o.pose = 'sleep'; if (env.night()) o.hat = 'nightcap'; }
+    if (!o.hat && settings.hat) o.hat = settings.hat;
     if (settings.seasonal && !o.hat && env.month() === 9 && (st === 'idle' || st === 'sleep')) o.hat = 'pumpkin';
     return o;
   }
@@ -1021,7 +1122,7 @@
     if (!look) {
       if (cursor.inside && Math.hypot(cursor.x - cat.x, cursor.y - cat.y) < 900) {
         look = { x: clamp(((cursor.x - cat.x) / 380) * cat.flip, -1, 1), y: clamp((cursor.y - env.headTopY() - cat.h * 0.3) / 380, -1, 1) };
-      } else look = { x: 0, y: 0 };
+      } else look = { x: saccade.x, y: saccade.y };
     }
     cat.look.x += (look.x - cat.look.x) * 0.25;
     cat.look.y += (look.y - cat.look.y) * 0.25;
@@ -1034,6 +1135,16 @@
       pose: o.pose || (cat.walking ? 'walk' : undefined),
       burp: o.burp || 0,
       cache: catCache,
+      earAngle: dyn.ear.x,
+      earWobble: dyn.earW.x,
+      tailUp: dyn.tailUp.x,
+      tailFlick: dyn.flick.x,
+      tailLag: dyn.lag.x,
+      tailSway: dyn.sway.x,
+      pupil: clamp(dyn.pupil.x, 0.6, 1.7),
+      lid: dyn.lidOut,
+      headOffset: { x: dyn.hx.x, y: dyn.hy.x },
+      jiggle: clamp(dyn.jig.x, -10, 10),
     });
     if (opts.pose === undefined) delete opts.pose;
     cctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1158,6 +1269,14 @@
   function say(text, ms, opts) {
     opts = opts || {};
     if (opts.html) bubbleEl.innerHTML = text; else bubbleEl.textContent = text;
+    bubbleEl.classList.toggle('interactive', !!(opts.actions && opts.actions.length));
+    for (const a of opts.actions || []) {
+      const b = document.createElement('button');
+      b.className = 'btn bubble-action';
+      b.textContent = a.label;
+      b.addEventListener('click', (ev) => { ev.stopPropagation(); hideBubble(); a.run(); });
+      bubbleEl.append(document.createElement('br'), b);
+    }
     bubbleEl.classList.remove('hidden');
     bubbleEl.style.animation = 'none';
     void bubbleEl.offsetWidth;
@@ -1165,7 +1284,14 @@
     bubbleUntil = now() + (ms || 3000) / 1000;
     bubbleSticky = !!opts.sticky;
   }
-  function hideBubble() { bubbleEl.classList.add('hidden'); bubbleUntil = 0; bubbleSticky = false; }
+  function hideBubble() { bubbleEl.classList.add('hidden'); bubbleEl.classList.remove('interactive'); bubbleUntil = 0; bubbleSticky = false; }
+
+  // Jump to the terminal/editor window of the session that needs you.
+  async function takeMeThere(project) {
+    const ok = await api.focusSession(project);
+    if (ok) { env.sfx('mrrp'); say('There you go! 🐾', 1400); }
+    else say('I couldn’t find that window. Is “Desktop awareness” on in Settings?', 3000);
+  }
   function toast(text, ms) {
     toastEl.textContent = text;
     toastEl.classList.remove('hidden');
@@ -1203,14 +1329,18 @@
   // ---- permission card (paw approval)
   let perm = null;
   function permVisible() { return !!perm; }
+  const permQueue = [];
   function showPermission(p) {
     if (!settings.pawApproval) { api.decide(p.id, null); return; }
+    if (perm) { permQueue.push(p); return; }
     perm = Object.assign({ t0: now(), armed: false }, p);
     const cmd = p.input && (p.input.command || p.input.file_path || p.input.url || p.input.pattern) || JSON.stringify(p.input || {}).slice(0, 200);
     const risky = /\b(rm\s+-|remove-item|git\s+push|reset\s+--hard|drop\s+table|truncate|mkfs|format|shutdown|publish)\b/i.test(cmd);
     perm.risky = risky;
+    perm.truncated = !!(p.input && p.input.__truncated);
     permEl.querySelector('.perm-title').textContent = `${p.project || 'Claude'} wants to use ${p.tool}`;
-    permEl.querySelector('.perm-cmd').textContent = cmd;
+    permEl.querySelector('.perm-cmd').textContent = perm.truncated ? cmd + '\n… (too long to show here, please review it in the terminal)' : cmd;
+    permEl.querySelector('.allow').disabled = perm.truncated;
     permEl.classList.toggle('danger', risky);
     const allow = permEl.querySelector('.allow');
     allow.textContent = 'Allow 🐾';
@@ -1226,9 +1356,11 @@
     if (!(director.cur && director.cur.name === 'needsYou')) director.play('needsYou', {}, true);
   }
   function hidePermission(id) {
-    if (!perm || (id && perm.id !== id)) return;
+    if (id && perm && perm.id !== id) { const i = permQueue.findIndex((q) => q.id === id); if (i >= 0) permQueue.splice(i, 1); return; }
+    if (!perm) return;
     perm = null;
     permEl.classList.add('hidden');
+    if (permQueue.length) setTimeout(() => showPermission(permQueue.shift()), 250);
   }
   permEl.querySelector('.allow').addEventListener('click', (e) => {
     if (!perm) return;
@@ -1256,6 +1388,8 @@
       ['play', '🎾 Play!'],
       ['nap', status.state === 'sleep' || (director.cur && director.cur.name === 'nap') ? '☀️ Wake up' : '😴 Nap'],
       ['box', '📦 Sit in a box'],
+      ['diary', '📔 Today’s diary'],
+      ...(env.sessionNeeding() && settings.desktopAwareness ? [['goto', `🪟 Take me to ${esc(env.sessionNeeding().project)}`]] : []),
       ['hr'],
       ['dnd', settings.dnd ? '🔔 Turn off Do Not Disturb' : '🔕 Do Not Disturb'],
       ['settings', '⚙️ Settings…'],
@@ -1270,19 +1404,30 @@
     const first = menuEl.querySelector('button');
     if (first) first.focus();
   }
-  function hideMenu() { menuEl.classList.add('hidden'); }
+  function hideMenu() {
+    if (menuEl.classList.contains('hidden')) return;
+    menuEl.classList.add('hidden');
+    if (askEl.classList.contains('hidden')) api.focusOverlay(false);
+  }
+  function hideAsk() {
+    if (askEl.classList.contains('hidden')) return;
+    askEl.classList.add('hidden');
+    api.focusOverlay(false);
+  }
   menuEl.addEventListener('click', (e) => {
     const id = e.target.closest('button') && e.target.closest('button').dataset.id;
     if (!id) return;
     hideMenu();
     if (id === 'ask') openAsk();
     else if (id === 'feed') director.play('eatFish', {}, true);
-    else if (id === 'play') director.play(pick(['yarn', 'butterfly', 'zoomies', 'dance', 'tailChase', 'roll']), {}, true);
+    else if (id === 'play') { const ok = ['yarn', 'butterfly', 'zoomies', 'dance', 'tailChase', 'roll'].filter((n) => !B[n].cond || B[n].cond(env)); director.play(pick(ok.length ? ok : ['dance']), {}, true); }
     else if (id === 'nap') director.play(director.cur && director.cur.name === 'nap' ? 'shakeFur' : 'nap', {}, true);
     else if (id === 'box') director.play('box', {}, true);
+    else if (id === 'diary') api.ask('diary').then((a) => { director.play('meowQuiet', {}, true); say(a, Math.min(14000, 3000 + a.length * 45)); });
+    else if (id === 'goto') { const w = env.sessionNeeding(); if (w) takeMeThere(w.project); }
     else if (id === 'dnd') api.saveSettings({ dnd: !settings.dnd });
     else if (id === 'settings') api.openSettings();
-    else if (id === 'hide') toggleHidden();
+    else if (id === 'hide') api.toggleVisible();
     else if (id === 'quit') api.quit();
   });
 
@@ -1297,7 +1442,7 @@
   askEl.addEventListener('submit', async (e) => {
     e.preventDefault();
     const q = $('ask-input').value.trim();
-    askEl.classList.add('hidden');
+    hideAsk();
     const a = await api.ask(q);
     env.sfx('mrrp');
     director.play('meowQuiet', {}, true);
@@ -1310,10 +1455,10 @@
   };
   B.feastPreview = Object.assign({}, B.feast, { dur: 4, while: undefined });
   B.meowQuiet = { pri: 3, dur: 1.2, frame: (e, k) => ({ mouth: k < 0.4 ? 'meow' : 'w', ears: 'perk' }) };
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { hideMenu(); askEl.classList.add('hidden'); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { hideMenu(); hideAsk(); } });
   document.addEventListener('pointerdown', (e) => {
     if (!menuEl.contains(e.target)) hideMenu();
-    if (!askEl.contains(e.target) && e.target !== catEl) askEl.classList.add('hidden');
+    if (!askEl.contains(e.target) && e.target !== catEl) hideAsk();
   });
   window.addEventListener('blur', () => { hideMenu(); });
 
@@ -1328,12 +1473,12 @@
   catEl.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     catEl.setPointerCapture(e.pointerId);
-    const ex = e.clientX + vp.x, ey = e.clientY + vp.y;
+    const ex = e.screenX - view.ox, ey = e.screenY - view.oy;
     drag = { id: e.pointerId, sx: ex, sy: ey, ox: cat.x - ex, oy: cat.y - ey, moved: false, hist: [[ex, ey, now()]] };
   });
   catEl.addEventListener('pointermove', (e) => {
     if (!drag) return;
-    const ex = e.clientX + vp.x, ey = e.clientY + vp.y;
+    const ex = e.screenX - view.ox, ey = e.screenY - view.oy;
     drag.hist.push([ex, ey, now()]);
     if (drag.hist.length > 6) drag.hist.shift();
     if (!drag.moved && Math.hypot(ex - drag.sx, ey - drag.sy) > 6) {
@@ -1351,11 +1496,15 @@
       cat.y = ey + drag.oy;
     }
   });
-  catEl.addEventListener('pointerup', (e) => {
+  catEl.addEventListener('pointercancel', () => releaseDrag(true));
+  catEl.addEventListener('lostpointercapture', () => releaseDrag(true));
+  catEl.addEventListener('pointerup', () => releaseDrag(false));
+  function releaseDrag(cancelled) {
     if (!drag) return;
     const d = drag;
     drag = null;
     catEl.classList.remove('dragging');
+    if (cancelled && !d.moved) return;
     if (d.moved) {
       const a = d.hist[0], b = d.hist[d.hist.length - 1];
       const dt = Math.max(0.016, b[2] - a[2]);
@@ -1365,7 +1514,10 @@
       cat.userThrown = true;
       cat.spin = Math.abs(cat.vx) > 900 ? Math.sign(cat.vx) * 10 : 0;
       cat.spinAngle = 0;
-      if (cat.x < 0 || cat.x > view.w) api.moveDisplay({ x: cat.x, y: cat.y }).then((b2) => { if (b2) { cat.x = cat.x < 0 ? b2.width - cat.w : cat.w; cat.y = 0; resize(b2); } });
+      if (cat.x < 0 || cat.x > view.w) {
+        const toLeft = cat.x < 0;
+        api.moveDisplay({ x: cat.x, y: cat.y }).then((b2) => { if (b2) { resize(b2); cat.x = toLeft ? b2.width - cat.w : cat.w; cat.y = cat.h; } });
+      }
       return;
     }
     const t = Date.now();
@@ -1377,11 +1529,13 @@
       lastClick = t;
       clickTimer = setTimeout(() => {
         if (director.cur && director.cur.name === 'breakTime') { director.end(); say('Okay okay, back to work 😼', 1500); return; }
+        const waiting = env.sessionNeeding();
+        if (waiting && settings.desktopAwareness) { takeMeThere(waiting.project); return; }
         director.play('boop', {}, true);
         if (status.sessions.length) showStatusLine();
       }, 260);
     }
-  });
+  }
   catEl.addEventListener('contextmenu', (e) => { e.preventDefault(); showMenu(e.clientX + vp.x, e.clientY + vp.y); });
   catEl.addEventListener('pointerenter', () => { hover.on = true; hover.since = now(); });
   catEl.addEventListener('pointerleave', () => { hover.on = false; rosterEl.classList.add('hidden'); });
@@ -1458,7 +1612,7 @@
         const half = (a.bodyRx + 30) * cat.k;
         rects.push({ x: Math.round(cat.x - half), y: Math.round(top), w: Math.round(half * 2), h: Math.round(cat.y - top) });
       }
-      for (const el of [permEl, menuEl, askEl]) {
+      for (const el of [permEl, menuEl, askEl, ...(bubbleEl.classList.contains('interactive') ? [bubbleEl] : [])]) {
         if (el.classList.contains('hidden')) continue;
         const r = el.getBoundingClientRect();
         rects.push({ x: Math.round(r.left + vp.x), y: Math.round(r.top + vp.y), w: Math.round(r.width), h: Math.round(r.height) });
@@ -1500,7 +1654,7 @@
   }
 
   function resize(bounds) {
-    if (bounds && bounds.width) { view.w = bounds.width; view.h = bounds.height; }
+    if (bounds && bounds.width) { view.w = bounds.width; view.h = bounds.height; view.ox = bounds.x || 0; view.oy = bounds.y || 0; }
     stageEl.style.width = view.w + 'px';
     stageEl.style.height = view.h + 'px';
     fxEl.style.width = view.w + 'px';
@@ -1511,6 +1665,7 @@
     fxEl.width = Math.round(view.w * dpr);
     fxEl.height = Math.round(view.h * dpr);
     cat.x = clamp(cat.x, cat.w * 0.4, view.w - cat.w * 0.4);
+    if (cat.homeX != null) cat.homeX = clamp(cat.homeX, cat.w * 0.5, view.w - cat.w * 0.5);
     if (cat.mode === 'floor') cat.y = env.floorY();
     fxDirty = true;
   }
@@ -1519,7 +1674,7 @@
     const sizeChanged = !settings || s.size !== settings.size;
     const skinChanged = !settings || s.skin !== settings.skin;
     settings = s;
-    SND.configure({ volume: s.volume, enabled: s.sounds && !s.dnd });
+    SND.configure({ volume: s.volume, enabled: s.sounds && !s.dnd, speech: !s.dnd });
     if (sizeChanged) { sizeCat(); catCache.clear(); miniCache.clear(); }
     if (skinChanged) { catCache.clear(); miniCache.clear(); }
     if (skinChanged) makeTrayIcon();
@@ -1537,12 +1692,20 @@
     if ((s.state === 'needs' || s.state === 'danger') && !(director.cur && director.cur.name === 'needsYou')) director.play('needsYou');
     if (s.state === 'error' && /rate|limit|resting/i.test(s.detail || '') && !(director.cur && director.cur.name === 'rateLimit')) director.play('rateLimit');
     if (!rosterEl.classList.contains('hidden')) renderRoster();
+    if ((s.state === 'idle' || s.state === 'sleep') && prev.state !== s.state) statusUntil = Math.min(statusUntil, now() + 1.5);
+    // kittens whose subagent vanished (session ended, Ctrl+C) go home instead of staying forever
+    const live = new Set();
+    for (const ss of s.sessions || []) for (const k of ss.subagents || []) live.add(k.id);
+    for (const k of kittens.values()) {
+      if (k.state !== 'home' && !String(k.id).startsWith('preview-') && !live.has(k.id) && now() - k.t0 > 5) { k.state = 'home'; k.t0 = now(); }
+    }
   }
 
   function onFx(fx) {
     if (fx.type === 'kitten-spawn') { spawnKitten(fx.agentId, fx.agentType); director.play('perk'); return; }
     if (fx.type === 'kitten-return') { returnKitten(fx.agentId, fx.agentType); return; }
     if (fx.type === 'cafe-visit') { addVisitor(fx); return; }
+    if (fx.type === 'achievement') { director.play('achievement', fx, true); return; }
     if (fx.type === 'session-start') { director.play('wakeUp', { project: fx.project, prev: status.state }); return; }
     if (fx.preview && (fx.type === 'needs' || fx.type === 'permission')) { director.play('needsPreview', {}, true); return; }
     if (fx.preview && fx.type === 'compact-start') { director.play('feastPreview', {}, true); return; }
@@ -1576,7 +1739,7 @@
       want = { x: 0, y: 0, w: view.w, h: view.h };
     } else {
       if (!vp.compactSince) vp.compactSince = t;
-      const pad = 340;
+      const pad = Math.max(340, 0.42 * cat.w + 380); // perm card / Ask box sit beside her
       const box = { x: cat.x - pad, y: cat.y - cat.h - 330, x2: cat.x + pad, y2: cat.y + 8 };
       const inside = box.x >= vp.x - 2 && box.x2 <= vp.x + vp.w + 2 && box.y >= vp.y - 2 && box.y2 <= vp.y + vp.h + 2;
       const isFull = vp.w >= view.w && vp.h >= view.h;
@@ -1601,6 +1764,9 @@
   const perf = { t0: now(), ms: 0, frames: 0, ticks: 0, moving: 0 };
   let drawAcc = 1;
   function loop() {
+    let moving = false;
+    let fps = 12;
+    try {
     const t = now();
     const dt = Math.min(0.05, t - lastT);
     lastT = t;
@@ -1608,6 +1774,7 @@
     env.dt = dt;
     ov = director.update(t);
     updateCat(t, dt);
+    updateDynamics(t, dt);
     updateKittens(dt);
     updateVisitors(dt);
     updateFx(dt);
@@ -1615,11 +1782,11 @@
     updateCursorPlay(t);
     checkPerch(t);
     // "moving" needs 60 Hz for smooth motion; "active" just needs the normal animation rate
-    const moving = cat.walking || cat.mode === 'air' || cat.mode === 'hop' || cat.mode === 'drag' || particles.length > 0 || sprites.length > 0 || visitors.length > 0 || [...kittens.values()].some((k) => k.state !== 'work') || cat.sqT < 0.5 || !!ov.dx || !!ov.dy || !!ov.rot;
+    moving = cat.walking || cat.mode === 'air' || cat.mode === 'hop' || cat.mode === 'drag' || particles.length > 0 || sprites.length > 0 || visitors.length > 0 || [...kittens.values()].some((k) => k.state !== 'work') || cat.sqT < 0.5 || !!ov.dx || !!ov.dy || !!ov.rot;
     const active = moving || !!director.cur || kittens.size > 0 || hover.on;
     const calm = !active && (status.state === 'idle' || status.state === 'sleep');
     const base = settings.fps || 24;
-    const fps = calm ? (status.state === 'sleep' ? Math.min(8, base) : Math.min(12, base)) : !active ? Math.min(20, base) : base;
+    fps = calm ? (status.state === 'sleep' ? Math.min(8, base) : Math.min(12, base)) : !active ? Math.min(20, base) : base;
     drawAcc += dt;
     if (drawAcc >= 1 / fps - 0.004) {
       drawAcc = 0;
@@ -1639,9 +1806,13 @@
     positionUI(t);
     updateViewport(t);
     sendHitRects(t);
-    // when nothing moves, sleep between frames instead of spinning at 60 Hz
-    if (moving) requestAnimationFrame(loop);
-    else setTimeout(loop, 1000 / fps);
+    } catch (err) {
+      console.error('loop', err && err.stack ? err.stack : err);
+    } finally {
+      // when nothing moves, sleep between frames instead of spinning at 60 Hz
+      if (moving) requestAnimationFrame(loop);
+      else setTimeout(loop, 1000 / fps);
+    }
   }
 
   async function boot() {
@@ -1692,11 +1863,11 @@
       init: async () => ({ bounds: { width: innerWidth, height: innerHeight }, settings: mockSettings, stats: mockStats, status: { state: 'idle', sessions: [], context: { tokens: 0, window: 200000 }, detail: 'Idle' } }),
       onStatus: on('status'), onFx: on('fx'), onStats: on('stats'), onSettings: on('settings'), onCursor: on('cursor'), onBounds: on('bounds'),
       onPermission: on('permission'), onPermissionResolved: on('permission-resolved'),
-      setHitRects() {}, setViewport: async () => null, moveDisplay: async () => null, savePosition() {}, decide(id, d) { console.log('decision', id, d); },
+      setHitRects() {}, toggleVisible() {}, setViewport: async () => null, moveDisplay: async () => null, savePosition() {}, decide(id, d) { console.log('decision', id, d); },
       feed: async () => { if (mockStats.fish > 0) { mockStats.fish--; return true; } return false; },
       pet() {}, openSettings() {}, quit() {}, trayIcon() {}, focusOverlay() {},
       ask: async (q) => `Mrrp! You asked “${q}”. In the real app I answer from your live sessions.`,
-      foregroundWindow: async () => null, sessionWindow: async () => null,
+      foregroundWindow: async () => null, sessionWindow: async () => null, focusSession: async () => false, getAchievements: async () => [],
       saveSettings: async (p) => { Object.assign(mockSettings, p); emit('settings', Object.assign({}, mockSettings)); },
     };
   }

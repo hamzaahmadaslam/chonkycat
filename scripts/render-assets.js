@@ -73,6 +73,8 @@ const PAGE = `<!doctype html><html><body style="margin:0">
       ['October', { hat: 'pumpkin', eyes: 'happy' }],
       ['Streak crown', { hat: 'crown', eyes: 'happy' }],
     ], 4, 260),
+    wardrobe: sheet([['Bow', { hat: 'bow', eyes: 'happy' }], ['Beanie', { hat: 'beanie' }], ['Party', { hat: 'party', eyes: 'star', mouth: 'smile' }], ['Wizard', { hat: 'wizard', eyes: 'happy' }], ['Headphones', { hat: 'headphones', eyes: 'half' }], ['Nightcap', { hat: 'nightcap' }], ['Crown', { hat: 'crown', eyes: 'happy' }], ['Hungry', { prop: 'bowl', full: 0, look: { x: -0.9, y: 0.8 }, ears: 'back' }]], 4, 260),
+    moods: sheet([['Happy', { tailUp: 1, earAngle: 0.4, pupil: 0.85, eyes: 'happy', mouth: 'smile' }], ['Hunting', { tailUp: 0.2, tailFlick: 1, earAngle: 1, pupil: 1.6, look: { x: 0.8, y: 0.3 } }], ['Scared', { tailUp: 0.9, earAngle: -1, pupil: 1.55, mouth: 'o' }], ['Anxious', { tailUp: 0.1, earAngle: -0.5, pupil: 1.1, look: { x: -0.5, y: 0.4 } }], ['Content', { tailUp: 0.85, earAngle: 0, pupil: 0.75, lid: 0.45 }], ['Curious', { tailUp: 0.75, earAngle: 0.7, pupil: 1.25, headTilt: 0.18 }], ['Sleepy', { tailUp: 0.4, earAngle: -0.3, lid: 0.72, pupil: 0.8 }], ['Mid-blink', { tailUp: 0.75, earAngle: 0, lid: 0.82 }]], 4, 260),
     skins: sheet(Object.keys(A.SKINS).map((k) => [A.SKINS[k].label, { skin: k, eyes: 'happy', mouth: 'smile' }]), 4, 260),
   });
 </script></body></html>`;

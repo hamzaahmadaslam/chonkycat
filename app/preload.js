@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('chonky', {
   feed: () => ipcRenderer.invoke('feed'),
   pet: () => ipcRenderer.send('pet'),
   openSettings: () => ipcRenderer.send('open-settings'),
+  toggleVisible: () => ipcRenderer.send('toggle-visible'),
   quit: () => ipcRenderer.send('quit'),
   trayIcon: (dataUrl) => ipcRenderer.send('tray-icon', dataUrl),
   focusOverlay: (on) => ipcRenderer.send('focus-overlay', on),
@@ -34,5 +35,7 @@ contextBridge.exposeInMainWorld('chonky', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (patch) => ipcRenderer.invoke('save-settings', patch),
   getStats: () => ipcRenderer.invoke('get-stats'),
+  getAchievements: () => ipcRenderer.invoke('get-achievements'),
+  focusSession: (project) => ipcRenderer.invoke('focus-session', project),
   previewFx: (type) => ipcRenderer.invoke('preview-fx', type),
 });

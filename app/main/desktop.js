@@ -28,6 +28,10 @@ public static class ChonkyWin {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
   [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint cmd);
   [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr h, int idx);
   [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out RECT r, int s);
@@ -39,10 +43,18 @@ public static class ChonkyWin {
     int pid; GetWindowThreadProcessId(h, out pid);
     string name = "";
     try { name = System.Diagnostics.Process.GetProcessById(pid).ProcessName; } catch {}
-    string t = sb.ToString().Replace("\\", "\\\\").Replace("\"", "\\\"");
+    string t = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), "[\\x00-\\x1F]", " ").Replace("\\", "\\\\").Replace("\"", "\\\"");
     return "{\"id\":" + h.ToInt64() + ",\"title\":\"" + t + "\",\"proc\":\"" + name + "\",\"x\":" + r.L + ",\"y\":" + r.T + ",\"w\":" + (r.R - r.L) + ",\"h\":" + (r.B - r.T) + ",\"pid\":" + pid + "}";
   }
   public static string Foreground() { return Info(GetForegroundWindow()); }
+  public static string Focus(long id) {
+    IntPtr h = new IntPtr(id);
+    if (IsIconic(h)) ShowWindow(h, 9);
+    // Windows only lets the foreground app hand over focus; a synthetic Alt press unlocks it.
+    keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero);
+    BringWindowToTop(h);
+    return SetForegroundWindow(h) ? "true" : "false";
+  }
   public static string List() {
     var items = new List<string>();
     int self = System.Diagnostics.Process.GetCurrentProcess().Id;
@@ -63,12 +75,20 @@ public static class ChonkyWin {
 "@
 [void][ChonkyWin]::SetProcessDPIAware()
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
+# Each request is "<id> <command> [arg]"; replies are "<id><TAB><json>" so a late reply
+# can never be mistaken for the answer to a newer request.
 while ($true) {
   $line = [Console]::In.ReadLine()
   if ($line -eq $null) { break }
-  if ($line -eq 'fg') { [Console]::Out.WriteLine([ChonkyWin]::Foreground()) }
-  elseif ($line -eq 'list') { [Console]::Out.WriteLine([ChonkyWin]::List()) }
-  else { [Console]::Out.WriteLine('null') }
+  $parts = $line.Split(' ')
+  $id = $parts[0]; $cmd = $parts[1]
+  try {
+    if ($cmd -eq 'fg') { $out = [ChonkyWin]::Foreground() }
+    elseif ($cmd -eq 'list') { $out = [ChonkyWin]::List() }
+    elseif ($cmd -eq 'focus') { $out = [ChonkyWin]::Focus([long]$parts[2]) }
+    else { $out = 'null' }
+  } catch { $out = 'null' }
+  [Console]::Out.WriteLine($id + [char]9 + $out)
   [Console]::Out.Flush()
 }
 `;
@@ -77,8 +97,10 @@ class Desktop {
   constructor(opts) {
     this.toDip = (opts && opts.toDip) || ((r) => r);
     this.ownPid = process.pid;
-    this.queue = [];
+    this.pending = new Map(); // request id -> callback
+    this.seq = 0;
     this.ok = true;
+    this.restarts = 0;
     this.platform = process.platform;
   }
 
@@ -93,13 +115,30 @@ class Desktop {
       this.ok = false;
       return;
     }
-    this.ps.on('exit', () => { this.ok = false; this.ps = null; for (const q of this.queue.splice(0)) q(null); });
+    this.ok = true;
+    this.warm = false;
+    this.ps.on('error', () => { this.ok = false; });
+    this.ps.stdin.on('error', () => {});
+    this.ps.on('exit', () => {
+      this.ok = false;
+      this.ps = null;
+      for (const cb of this.pending.values()) cb(null);
+      this.pending.clear();
+      // the helper died (sleep/resume, AV, crash): bring it back a few times
+      if (!this.stopped && this.restarts < 5) {
+        this.restarts++;
+        setTimeout(() => { if (!this.stopped) this.start(); }, 2000 * this.restarts).unref();
+      }
+    });
     this.rl = readline.createInterface({ input: this.ps.stdout });
     this.rl.on('line', (line) => {
       this.warm = true;
-      const cb = this.queue.shift();
-      if (!cb) return;
-      try { cb(JSON.parse(line)); } catch { cb(null); }
+      const tab = line.indexOf('\t');
+      if (tab < 0) return;
+      const cb = this.pending.get(line.slice(0, tab));
+      if (!cb) return; // a reply that already timed out
+      this.pending.delete(line.slice(0, tab));
+      try { cb(JSON.parse(line.slice(tab + 1))); } catch { cb(null); }
     });
   }
 
@@ -107,10 +146,10 @@ class Desktop {
     return new Promise((resolve) => {
       if (this.platform === 'win32') {
         if (!this.ps || !this.ok) return resolve(null);
-        const timer = setTimeout(() => { const i = this.queue.indexOf(done); if (i >= 0) this.queue.splice(i, 1); resolve(null); }, this.warm ? 2500 : 8000);
-        const done = (v) => { clearTimeout(timer); resolve(v); };
-        this.queue.push(done);
-        this.ps.stdin.write(cmd + '\n');
+        const id = String(++this.seq);
+        const timer = setTimeout(() => { this.pending.delete(id); resolve(null); }, this.warm ? 3000 : 10000);
+        this.pending.set(id, (v) => { clearTimeout(timer); resolve(v); });
+        try { this.ps.stdin.write(id + ' ' + cmd + '\n'); } catch { this.pending.delete(id); clearTimeout(timer); resolve(null); }
       } else if (this.platform === 'darwin') {
         macQuery(cmd).then(resolve, () => resolve(null));
       } else {
@@ -152,7 +191,19 @@ class Desktop {
     return bestScore >= 3 ? best : null;
   }
 
+  // Bring a window (from list()/findSessionWindow()) to the front.
+  async focus(w) {
+    if (!w) return false;
+    if (this.platform === 'win32') return (await this.ask('focus ' + Math.trunc(Number(w.id)))) === true;
+    try {
+      if (this.platform === 'darwin') await run('osascript', ['-e', `tell application "System Events" to set frontmost of (first process whose unix id is ${Math.trunc(Number(w.pid))}) to true`]);
+      else await run('wmctrl', ['-ia', '0x' + Math.trunc(Number(w.id)).toString(16)]);
+      return true;
+    } catch { return false; }
+  }
+
   stop() {
+    this.stopped = true;
     if (this.ps) try { this.ps.kill(); } catch {}
     if (this.scriptFile) try { fs.unlinkSync(this.scriptFile); } catch {}
   }

@@ -139,3 +139,39 @@ test('hook guard asks before risky commands and stays silent otherwise', () => {
   assert.strictEqual(ev.status, 0);
   fs.rmSync(home, { recursive: true, force: true });
 });
+
+test('achievements unlock hats once and track progress', () => {
+  const os2 = require('os');
+  process.env.CHONKY_HOME = fs.mkdtempSync(path.join(os2.tmpdir(), 'chonky-stats-'));
+  delete require.cache[require.resolve('../app/shared/config')];
+  delete require.cache[require.resolve('../app/main/stats')];
+  const { Stats } = require('../app/main/stats');
+  const st = new Stats();
+  clearInterval(st.saver);
+  assert.deepStrictEqual(st.checkAchievements().filter((a) => a.id !== 'spooky'), []);
+  st.taskDone();
+  const fresh = st.checkAchievements().map((a) => a.id);
+  assert.ok(fresh.includes('first-fish'));
+  assert.deepStrictEqual(st.checkAchievements(), [], 'never unlocks twice');
+  for (let i = 0; i < 10; i++) st.bump('commits');
+  assert.ok(st.checkAchievements().some((a) => a.hat === 'beanie'));
+  assert.strictEqual(st.get().today.commits, 10, 'today counters follow bumps');
+  const herder = st.achievements().find((a) => a.id === 'herder');
+  assert.strictEqual(herder.unlocked, false);
+  assert.strictEqual(herder.goal, 10);
+  assert.ok(st.unlockedHats().includes('bow'));
+  delete process.env.CHONKY_HOME;
+});
+
+test('day key uses the local calendar day, not UTC', () => {
+  const { dayKey } = require('../app/main/stats');
+  const d = new Date(2026, 9, 2, 0, 30); // 00:30 local on 2 Oct
+  assert.strictEqual(dayKey(d), '2026-10-02');
+});
+
+test('Ask Arshia keeps a diary', () => {
+  const stats = { fish: 2, streakDays: 3, today: { tasks: 4, fish: 4, commits: 2, kittens: 1, minutesWorking: 95 } };
+  const out = answer('diary', { settings: { name: 'Arshia' }, status: { sessions: [] }, stats });
+  assert.match(out, /finished 4 tasks/);
+  assert.match(out, /1h 35m/);
+});

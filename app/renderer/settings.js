@@ -7,7 +7,7 @@
 
   const BOOL = ['roam', 'randomAnimations', 'cursorPlay', 'seasonal', 'showStatusLine', 'sounds', 'speakSummaries', 'pawApproval', 'dangerGuard', 'autoStart', 'dnd', 'desktopAwareness', 'perchOnWindows', 'runToWindow', 'breakGuardian', 'launchAtLogin'];
   const NUM = ['size', 'fps', 'volume', 'animationFrequency', 'pawApprovalTimeout', 'breakMinutes'];
-  const TEXT = ['name', 'hotkey', 'voice'];
+  const TEXT = ['name', 'hotkey', 'voice', 'notifications'];
 
   const PREVIEWS = [
     ['hello', '👋 Hello'], ['session-start', '🌅 New session'], ['prompt', '💭 Prompt'], ['git-commit', '📦 Commit'], ['git-push', '🚀 Push'],
@@ -43,7 +43,14 @@
 
   function wire() {
     for (const k of BOOL) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
-    for (const k of NUM) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
+    for (const k of NUM) $(k).addEventListener('change', (e) => {
+      const el = e.target;
+      const v = Number(el.value);
+      if (el.value === '' || !Number.isFinite(v)) { fill(); return; }
+      const lo = el.min !== '' ? Number(el.min) : -Infinity;
+      const hi = el.max !== '' ? Number(el.max) : Infinity;
+      save({ [k]: Math.max(lo, Math.min(hi, v)) });
+    });
     for (const k of TEXT) $(k).addEventListener('change', (e) => save({ [k]: e.target.value }));
     const cafe = () => save({ cafe: { enabled: $('cafeEnabled').checked, room: $('cafeRoom').value.trim(), displayName: $('cafeName').value.trim(), shareProject: $('cafeProject').checked } });
     ['cafeEnabled', 'cafeRoom', 'cafeName', 'cafeProject'].forEach((id) => $(id).addEventListener('change', cafe));
@@ -59,7 +66,7 @@
       const c = document.createElement('canvas');
       c.width = 210; c.height = 200;
       b.append(c, document.createTextNode(A.SKINS[key].label));
-      b.addEventListener('click', () => { save({ skin: key }); document.querySelectorAll('.skin').forEach((el) => el.classList.toggle('on', el === b)); });
+      b.addEventListener('click', async () => { await save({ skin: key }); document.querySelectorAll('.skin').forEach((el) => el.classList.toggle('on', el === b)); wardrobe(); });
       box.append(b);
     }
   }
@@ -79,6 +86,37 @@
       A.draw(x, { skin: c.parentElement.dataset.skin, t: t + c.parentElement.dataset.skin.length, fat: 0.3 });
     });
     setTimeout(() => requestAnimationFrame(() => draw(performance.now() / 1000)), 50);
+  }
+
+  // Wardrobe: one tile per achievement, drawn with the hat on. Locked hats show progress.
+  async function wardrobe() {
+    const list = await api.getAchievements();
+    const box = $('hats');
+    box.innerHTML = '';
+    const tiles = [{ hat: '', label: 'No hat', desc: 'Au naturel', unlocked: true }].concat(list);
+    for (const a of tiles) {
+      const b = document.createElement('button');
+      b.className = 'hat' + (a.unlocked ? '' : ' locked') + ((s.hat || '') === a.hat ? ' on' : '');
+      b.dataset.hat = a.hat;
+      const c = document.createElement('canvas');
+      c.width = 220; c.height = Math.round(220 * A.H / A.W);
+      const x = c.getContext('2d');
+      const k = c.width / A.W;
+      x.setTransform(k, 0, 0, k, 0, 0);
+      A.draw(x, { skin: s.skin, t: 0.6, fat: 0.25, hat: a.hat || undefined, eyes: a.unlocked ? 'happy' : 'open', mouth: 'w' });
+      const label = document.createElement('div');
+      label.textContent = a.label;
+      const small = document.createElement('small');
+      small.textContent = a.unlocked ? (a.hat ? 'Unlocked' : '') : `${a.desc} (${a.progress}/${a.goal})`;
+      b.append(c, label, small);
+      if (!a.unlocked) { const l = document.createElement('span'); l.className = 'lock'; l.textContent = '🔒'; b.append(l); }
+      b.addEventListener('click', () => {
+        if (!a.unlocked) return;
+        save({ hat: a.hat });
+        box.querySelectorAll('.hat').forEach((el) => el.classList.toggle('on', el === b));
+      });
+      box.append(b);
+    }
   }
 
   async function stats() {
@@ -106,6 +144,7 @@
     wire();
     voices();
     stats();
+    wardrobe();
     const fx = $('fx');
     for (const [type, label] of PREVIEWS) {
       const b = document.createElement('button');
@@ -116,6 +155,7 @@
     api.onSettings((ns) => { s = ns; fill(); });
     draw(0);
     setInterval(stats, 5000);
+    setInterval(wardrobe, 15000);
   }
   boot();
 })();

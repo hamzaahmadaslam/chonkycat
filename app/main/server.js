@@ -35,7 +35,8 @@ class EventServer extends EventEmitter {
   }
 
   route(req, res) {
-    const url = new URL(req.url, 'http://127.0.0.1');
+    let url;
+    try { url = new URL(req.url, 'http://127.0.0.1'); } catch { return send(res, 400, { error: 'url' }); }
     if (req.method === 'GET' && url.pathname === '/health') {
       return send(res, 200, { ok: true, app: 'chonkycat' });
     }

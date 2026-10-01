@@ -50,7 +50,7 @@ There are a few Claude Code desktop pets around. Arshia, your Chonky Cat, does t
 |---|---|---|
 | 🍔 | **Context-window belly** | Arshia literally gets chubbier as your context window fills. Run `/compact` and she munches through the conversation, then *burps* and slims down. |
 | 🐱 | **Subagent kittens** | Every subagent Claude starts pops out as a little kitten with a name tag (`Explore`, `Plan`…) that walks off and works on its own tiny laptop, then trots home carrying a fish when it’s done. |
-| 🙀 | **Danger sense** | Before `rm -rf`, `git push --force`, `git reset --hard`, `DROP TABLE`, `curl … \| sh` and friends, her fur puffs up and she hisses. The guard also forces Claude Code to *ask* before those commands — even in auto-accept mode. |
+| 🙀 | **Danger sense** | Before `rm -rf`, `git push --force`, `git reset --hard`, `DROP TABLE`, `curl … \| sh` and friends, her fur puffs up and she hisses. The guard also makes Claude Code *ask* before those commands, even in auto-accept mode. It reads commands structurally, so text inside quotes (commit messages, grep patterns, file names) doesn't set it off. For headless `claude -p` or CI runs, where nobody can answer, turn the guard off in Settings. |
 | 🐾 | **Paw approval** *(opt-in)* | Approve or deny Claude’s permission requests from a card next to Arshia. Risky commands need two clicks. Don’t answer and Claude simply asks in the terminal as usual. |
 | 🪟 | **She comes to find you** | When a session has been waiting on you for a while, Arshia runs over to that terminal/editor window, sits on its title bar and taps on the glass — leaving little paw smudges. |
 | 🪑 | **Window perching** | She hops onto the title bar of the window you’re using and tumbles off (“Hey, I was sitting there!”) when you drag it. |
@@ -61,6 +61,15 @@ There are a few Claude Code desktop pets around. Arshia, your Chonky Cat, does t
 | ☕ | **Cat café (LAN)** | Opt-in: when a teammate’s Claude finishes something, *their* cat walks across *your* screen and waves. Signed with a shared room code; only the cat’s name, skin and the event type are shared. |
 | 🎭 | **60+ animations** | Grooming, yawns, stretches, kneading biscuits, sneezes, hiccups, zoomies, tail chasing, barrel rolls, butterflies, yarn, “if I fits I sits”, bird-watching, morning coffee, stargazing, dancing, peekaboo, naps with fish dreams, pouncing on your cursor… picked at random so she never feels scripted. |
 | 🎃 | **Seasons & time of day** | Pumpkin hat in October, nightcap at night, coffee in the morning. |
+| 🧠 | **Real cat body language** | Spring physics give her ears, tail, head and belly follow-through and overlap, so nothing snaps. Her tail rides high with a hooked tip when she's happy and drops when something fails. When she's hunting your cursor her ears go forward, her pupils go huge and her tail tip flicks. Her eyes blink (sometimes twice), dart around, and half-close when she's content. |
+| 🪟 | **Take me there** | When Claude needs you, click Arshia (or the button in her bubble) and the waiting terminal or editor jumps to the front. If she's hidden, a system notification does the same. |
+| 🎩 | **Wardrobe & achievements** | Unlock hats by working: a bow for your first fish, a beanie at 10 commits, a wizard hat for herding 10 subagent kittens, coder headphones for 50 pets, a crown for a 7-day streak, and more. Dress her up in Settings. |
+| 🍽️ | **She gets hungry** | Leave her unfed and she sits by an empty bowl asking for fish. Feed her from the menu. |
+| 📔 | **Today's diary** | Right-click, then *Today's diary*, for a recap of your day in cat voice: tasks, commits, kittens and time worked. |
+
+<p align="center"><img src="docs/moods.png" alt="Arshia’s moods: happy with a hooked tail, hunting with perked ears and wide pupils, scared with flat ears, anxious with a low tail, content with half-closed eyes, curious with a head tilt, sleepy, and mid-blink"></p>
+
+<p align="center"><img src="docs/wardrobe.png" alt="Unlockable hats: bow, beanie, party hat, wizard hat, coder headphones, nightcap, crown, and the hungry cat with an empty bowl"></p>
 
 <p align="center"><img src="docs/fun.png" alt="Arshia thin at 10% context and very round at 90%, a subagent kitten, sitting in a box, heart eyes when petted, party hat, pumpkin hat, streak crown"></p>
 
@@ -86,7 +95,7 @@ Claude Code ──hooks──▶ chonky-hook.js ──HTTP (127.0.0.1 + token)�
 ```
 
 1. The plugin registers async hooks for `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SubagentStart/Stop`, `PreCompact/PostCompact`, `SessionEnd` and (sync) `PermissionRequest`.
-2. `chonky-hook.js` trims each payload (file contents are never sent) and POSTs it to the app on `127.0.0.1`, authenticated with a random per-install token. If the app isn’t running, the hook exits silently in milliseconds — **it can never slow down or break Claude Code**. On `SessionStart` it launches the app.
+2. `chonky-hook.js` trims each payload (file contents are never sent) and POSTs it to the app on `127.0.0.1`, authenticated with a random per-install token. Almost every hook runs **async**, so Claude never waits for it, and every failure path exits quietly with no output. The exceptions are the danger-sense guard, which adds roughly 0.1–0.2 s of Node start-up to each shell command and can be turned off, and paw approval, which is opt-in. On `SessionStart` it launches the app if it isn't running.
 3. The app keeps a small state machine per session, mirrors the most urgent one (danger › needs-you › error › working › thinking › done › idle), and reads the **tail** of the transcript to measure context-window usage.
 4. The overlay renders Arshia with Canvas 2D. The window hugs her (it only grows to full screen while kittens, visitors or confetti need the room) and drops to 8–12 fps when she’s just napping, to stay light.
 
@@ -115,6 +124,9 @@ Right-click Arshia → **Settings…** (or the tray icon). Everything saves inst
 | Desktop awareness, perching, run to window | on | |
 | Break guardian | 90 min | |
 | Cat café | off | Room code + display name |
+| Wander around | on | Strolls and perching; she always walks back to her spot (drag her to move it) |
+| Wardrobe | no hat | Hats unlock through achievements |
+| System notifications | when hidden | Off / only when the cat is hidden / always |
 | Do not disturb | off | No sounds, bubbles or visitors |
 
 ## CLI
@@ -145,7 +157,10 @@ About 1% of a modern CPU while napping, a bit more while animating. Choose *Batt
 Supported. Desktop awareness uses AppleScript on macOS (grant Accessibility permission if you want perching) and `xdotool`/`wmctrl` on Linux (optional). Click-through and always-on-top work everywhere Electron does.
 
 **Uninstall**
-`/plugin uninstall chonkycat@chonkycat`, `npx chonkycat stop`, and delete `~/.chonkycat`.
+1. `npx chonkycat stop`
+2. `/plugin uninstall chonkycat@chonkycat` (or `npx chonkycat uninstall-hooks` if you used `install-hooks`)
+3. Turn off *Launch at login* in Settings first if you enabled it
+4. Delete `~/.chonkycat`
 
 ## Development
 
@@ -153,7 +168,7 @@ Supported. Desktop awareness uses AppleScript on macOS (grant Accessibility perm
 git clone https://github.com/hamzaahmadaslam/chonkycat && cd chonkycat
 npm install
 npm start                 # run the app from source
-npm test                  # unit tests (risk rules, state machine, transcript, hook script)
+npm test                  # unit tests (danger-sense rules incl. 60+ dangerous / 25+ safe commands, state machine, transcript, achievements, hook script)
 npm run preview           # http://127.0.0.1:5174 — every pose, live, in the browser
 claude --plugin-dir ./plugin   # try the plugin without installing it
 ```

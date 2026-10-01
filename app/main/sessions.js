@@ -3,8 +3,7 @@
 //   'status'  — a snapshot for the renderer (the mood the cat should show)
 //   'fx'      — one-shot reactions (git commit stamp, kitten spawn, burp, …)
 const { EventEmitter } = require('events');
-const path = require('path');
-const { riskOf, activityOf, describe, commandOf, basename, truncate, TEST_CMD } = require('./classify');
+const { riskOf, activityOf, describe, commandOf, basename, truncate } = require('./classify');
 const transcript = require('./transcript');
 
 const PRIORITY = { danger: 7, needs: 6, error: 5, working: 4, thinking: 3, done: 2, idle: 1, sleep: 0 };
@@ -12,11 +11,15 @@ const DONE_HOLD_MS = 6000;
 const ERROR_HOLD_MS = 4000;
 const STALE_MS = 15 * 60 * 1000; // a session with no events for this long is considered gone
 const IDLE_SLEEP_MS = 4 * 60 * 1000;
+const NEEDS_STALE_MS = 60 * 60 * 1000; // a forgotten permission prompt (terminal closed) still expires
+const QUIET_IDLE_MS = 3 * 60 * 1000;
+const ENDED_MEMORY_MS = 5 * 60 * 1000;
 
 class Sessions extends EventEmitter {
   constructor() {
     super();
     this.map = new Map();
+    this.ended = new Map(); // session id -> time it ended
     this.lastActivity = 0;
     this.timer = setInterval(() => this.tick(), 1000);
     if (this.timer.unref) this.timer.unref();
@@ -54,9 +57,17 @@ class Sessions extends EventEmitter {
   handle(ev) {
     if (!ev || !ev.hook_event_name) return;
     const id = ev.session_id || 'default';
-    const s = this.get(id);
     const now = Date.now();
+    // hooks run async, so events can arrive after SessionEnd; don't resurrect the session
+    const ended = this.ended.get(id);
+    if (ended && ev.hook_event_name !== 'SessionStart') {
+      if (now - ended < ENDED_MEMORY_MS) return;
+      this.ended.delete(id);
+    }
+    if (ev.hook_event_name === 'SessionStart') this.ended.delete(id);
+    const s = this.get(id);
     s.lastEvent = now;
+    s.lastHook = ev.hook_event_name;
     this.lastActivity = now;
     if (ev.cwd) { s.cwd = ev.cwd; s.project = basename(ev.cwd); }
     if (ev.transcript_path) s.transcript = ev.transcript_path;
@@ -69,16 +80,24 @@ class Sessions extends EventEmitter {
       s.since = now;
       Object.assign(s, extra || {});
     };
+    // an alert raised by a subagent clears when that subagent moves on
+    const clearSubagentAlert = () => {
+      if (fromSubagent && s.alertAgent && ev.agent_id === s.alertAgent) {
+        s.alertAgent = null;
+        set('working', { risk: null, pending: null, needsSince: 0, detail: 'Working…' });
+      }
+    };
 
     switch (ev.hook_event_name) {
       case 'SessionStart':
-        set('idle', { activity: null, detail: ev.source === 'resume' ? 'Resumed' : 'Ready', needsSince: 0 });
+        if (ev.source === 'compact') break; // compaction restarts the context, not the session
+        set('idle', { activity: null, detail: ev.source === 'resume' ? 'Resumed' : 'Ready', needsSince: 0, pending: null, risk: null, inTurn: false });
         if (ev.context_tokens) s.context.tokens = ev.context_tokens;
         this.fx('session-start', s, { source: ev.source });
         break;
       case 'UserPromptSubmit':
         s.prompts++;
-        set('thinking', { activity: 'thinking', detail: 'Thinking…', needsSince: 0, risk: null });
+        set('thinking', { activity: 'thinking', detail: 'Thinking…', needsSince: 0, risk: null, pending: null, inTurn: true, rewarded: false, alertAgent: null });
         this.fx('prompt', s);
         break;
       case 'PreToolUse': {
@@ -89,6 +108,7 @@ class Sessions extends EventEmitter {
           const k = s.subagents.get(ev.agent_id);
           if (k) { k.detail = describe(ev.tool_name, ev.tool_input); k.activity = activity; }
           if (!risk) break; // keep the main cat on the main thread's activity
+          s.alertAgent = ev.agent_id;
         }
         if (risk) {
           set('danger', { activity, risk, detail: `Careful: ${risk}`, command: truncate(commandOf(ev.tool_input), 120) });
@@ -97,13 +117,13 @@ class Sessions extends EventEmitter {
           set('needs', { activity, detail: describe(ev.tool_name, ev.tool_input), needsSince: s.needsSince || now });
           this.fx('needs', s, { reason: 'question' });
         } else {
-          set('working', { activity, detail: describe(ev.tool_name, ev.tool_input), needsSince: 0, risk: null });
+          set('working', { activity, detail: describe(ev.tool_name, ev.tool_input), needsSince: 0, risk: null, pending: null });
           if (activity === 'git-commit' || activity === 'git-push' || activity === 'testing') this.fx(activity + '-start', s);
         }
         break;
       }
       case 'PostToolUse': {
-        if (fromSubagent) break;
+        if (fromSubagent) { clearSubagentAlert(); break; }
         const activity = activityOf(ev.tool_name, ev.tool_input);
         const code = ev.tool_response_exit_code;
         const failed = typeof code === 'number' && code !== 0;
@@ -112,19 +132,20 @@ class Sessions extends EventEmitter {
         else if (activity === 'testing') this.fx(failed ? 'tests-fail' : 'tests-pass', s);
         else if (activity === 'building') this.fx(failed ? 'tool-fail' : 'build-ok', s);
         else if (activity === 'installing' && !failed) this.fx('installed', s);
-        if (s.state === 'danger' || s.state === 'needs') set('working', { risk: null, needsSince: 0 });
+        if (s.state === 'danger' || s.state === 'needs') set('working', { risk: null, needsSince: 0, pending: null, detail: describe(ev.tool_name, ev.tool_input) });
         this.refreshContext(s);
         break;
       }
       case 'PostToolUseFailure': {
-        if (fromSubagent) break;
+        if (fromSubagent) { clearSubagentAlert(); break; }
         const activity = activityOf(ev.tool_name, ev.tool_input);
-        set('error', { holdUntil: now + ERROR_HOLD_MS, detail: `${ev.tool_name || 'Tool'} failed`, risk: null, needsSince: 0 });
+        set('error', { holdUntil: now + ERROR_HOLD_MS, detail: `${ev.tool_name || 'Tool'} failed`, risk: null, needsSince: 0, pending: null });
         this.fx(activity === 'testing' ? 'tests-fail' : 'tool-fail', s, { tool: ev.tool_name });
         break;
       }
       case 'PermissionRequest': {
         if (fromSubagent && !s.subagents.size) break;
+        if (fromSubagent) s.alertAgent = ev.agent_id;
         const risk = riskOf(ev.tool_name, ev.tool_input);
         set(risk ? 'danger' : 'needs', {
           detail: `Wants to: ${describe(ev.tool_name, ev.tool_input)}`,
@@ -136,7 +157,7 @@ class Sessions extends EventEmitter {
         break;
       }
       case 'PermissionDenied':
-        set('working', { needsSince: 0, pending: null });
+        set('working', { needsSince: 0, pending: null, risk: null, detail: 'Permission denied' });
         this.fx('denied', s);
         break;
       case 'Notification': {
@@ -145,7 +166,7 @@ class Sessions extends EventEmitter {
           if (s.state !== 'danger') set('needs', { detail: truncate(ev.message || 'Needs your input', 60), needsSince: s.needsSince || now });
           this.fx('needs', s, { reason: type, message: ev.message });
         } else if (type === 'idle_prompt') {
-          set('idle', { detail: 'Waiting for you', needsSince: 0 });
+          set('idle', { detail: 'Waiting for you', needsSince: 0, pending: null, inTurn: false });
           this.fx('idle-nudge', s);
         } else if (type === 'agent_completed') {
           this.fx('subagent-done', s, { message: ev.message });
@@ -156,13 +177,14 @@ class Sessions extends EventEmitter {
         if (fromSubagent) break;
         const summary = truncate(ev.last_assistant_message || '', 400);
         if (summary) s.lastSummary = summary;
-        set('done', { holdUntil: now + DONE_HOLD_MS, detail: 'All done!', risk: null, needsSince: 0, pending: null });
+        set('done', { holdUntil: now + DONE_HOLD_MS, detail: 'All done!', risk: null, needsSince: 0, pending: null, inTurn: false, alertAgent: null });
         this.refreshContext(s);
-        this.fx('done', s, { summary });
+        // a Stop re-sent because another Stop hook blocked it is the same turn: one fish per turn
+        if (!s.rewarded && !ev.stop_hook_active) { s.rewarded = true; this.fx('done', s, { summary }); }
         break;
       }
       case 'StopFailure':
-        set('error', { holdUntil: now + ERROR_HOLD_MS * 2, detail: friendlyError(ev.error_type), needsSince: 0 });
+        set('error', { holdUntil: now + ERROR_HOLD_MS * 2, detail: friendlyError(ev.error_type), needsSince: 0, pending: null, inTurn: false });
         this.fx('stop-failure', s, { errorType: ev.error_type, message: ev.error_message });
         break;
       case 'SubagentStart': {
@@ -175,21 +197,26 @@ class Sessions extends EventEmitter {
         const key = ev.agent_id;
         const k = key && s.subagents.get(key);
         if (key) s.subagents.delete(key);
+        if (key && key === s.alertAgent) { s.alertAgent = null; if (s.state === 'danger' || s.state === 'needs') set('working', { risk: null, pending: null, needsSince: 0, detail: 'Working…' }); }
         this.fx('kitten-return', s, { agentId: key, agentType: (k && k.type) || ev.agent_type || 'helper', summary: truncate(ev.last_assistant_message || '', 160) });
         break;
       }
       case 'PreCompact':
         set('working', { activity: 'compacting', detail: 'Digesting the conversation…' });
-        this.fx('compact-start', s, { reason: ev.compaction_reason });
+        this.fx('compact-start', s, { reason: ev.trigger || ev.compaction_reason });
         break;
-      case 'PostCompact':
+      case 'PostCompact': {
         s.context.tokens = Math.round(s.context.tokens * 0.15);
+        const manual = (ev.trigger || ev.compaction_reason) === 'manual';
+        set(manual || !s.inTurn ? 'idle' : 'thinking', { activity: manual ? null : 'thinking', detail: manual ? 'Compacted. Feeling light!' : 'Thinking…' });
         this.fx('compact-end', s);
         this.refreshContext(s, 1500);
         break;
+      }
       case 'SessionEnd':
-        this.fx('session-end', s, { reason: ev.end_reason });
+        this.fx('session-end', s, { reason: ev.reason || ev.end_reason });
         this.map.delete(id);
+        this.ended.set(id, now);
         break;
       case 'TaskCompleted':
         this.fx('task-done', s, { subject: ev.task_subject || ev.subject });
@@ -208,9 +235,11 @@ class Sessions extends EventEmitter {
     clearTimeout(s._ctxTimer);
     s._ctxTimer = setTimeout(() => {
       const info = transcript.inspect(s.transcript);
-      if (!info) return;
-      s.context = { tokens: info.tokens, window: info.window };
-      if (info.model) s.model = info.model;
+      if (!info) return; // no usage line in the tail: keep the last known value
+      // SessionStart's model id may carry a [1m] marker the API model id lacks
+      const window = Math.max(info.window, transcript.windowFor(s.model));
+      s.context = { tokens: info.tokens, window };
+      if (info.model && !/\[1m\]/i.test(s.model)) s.model = info.model;
       this.emitStatus();
     }, delay || 250);
   }
@@ -220,16 +249,27 @@ class Sessions extends EventEmitter {
     let changed = false;
     for (const [id, s] of this.map) {
       if ((s.state === 'done' || s.state === 'error') && s.holdUntil && now > s.holdUntil) {
-        s.state = 'idle';
-        s.detail = 'Waiting for you';
+        // an error mid-turn: Claude is still going, so go back to thinking
+        s.state = s.state === 'error' && s.inTurn ? 'thinking' : 'idle';
+        s.detail = s.state === 'thinking' ? 'Thinking…' : 'Waiting for you';
         s.holdUntil = 0;
         changed = true;
       }
-      if (now - s.lastEvent > STALE_MS && s.state !== 'needs') {
+      // Esc-interrupted turns never send Stop; settle down after a quiet spell
+      // (unless a tool is still running, e.g. a long build)
+      if ((s.state === 'working' || s.state === 'thinking') && s.lastHook !== 'PreToolUse' && now - s.lastEvent > QUIET_IDLE_MS) {
+        s.state = 'idle';
+        s.detail = 'Waiting for you';
+        s.inTurn = false;
+        changed = true;
+      }
+      const limit = s.state === 'needs' || s.state === 'danger' ? NEEDS_STALE_MS : STALE_MS;
+      if (now - s.lastEvent > limit) {
         this.map.delete(id);
         changed = true;
       }
     }
+    for (const [id, t] of this.ended) if (now - t > ENDED_MEMORY_MS) this.ended.delete(id);
     if (changed) this.emitStatus();
     else if (now % 5000 < 1000) this.emitStatus(); // keep "needs" timers fresh for escalation
   }

@@ -28,6 +28,8 @@ const DEFAULTS = {
   dangerGuard: true,
   randomAnimations: true,
   roam: true,
+  hat: '',
+  notifications: 'hidden', // off | hidden (only when the cat is hidden) | always
   animationFrequency: 1, // 0.5 calm … 2 hyper
   desktopAwareness: true,
   runToWindow: true,
@@ -49,7 +51,7 @@ function ensureHome() {
 }
 
 function readJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
+  try { return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); } catch { return fallback; }
 }
 
 function writeJSON(file, data, mode) {
@@ -60,7 +62,8 @@ function writeJSON(file, data, mode) {
 }
 
 function loadSettings() {
-  const s = readJSON(FILES.settings, {});
+  let s = readJSON(FILES.settings, {});
+  if (!s || typeof s !== 'object' || Array.isArray(s)) s = {};
   return Object.assign({}, DEFAULTS, s, { cafe: Object.assign({}, DEFAULTS.cafe, s.cafe || {}) });
 }
 

@@ -5,6 +5,7 @@
   let master = null;
   let volume = 0.45;
   let enabled = true;
+  let speech = true;
   const last = {};
 
   function ctx() {
@@ -134,6 +135,7 @@
     configure(opts) {
       if (opts.volume != null) { volume = opts.volume; if (master) master.gain.value = volume; }
       if (opts.enabled != null) enabled = opts.enabled;
+      if (opts.speech != null) speech = opts.speech;
     },
     play(name, minGap) {
       if (!enabled || !SOUNDS[name]) return;
@@ -143,15 +145,23 @@
       try { SOUNDS[name](); } catch (e) { /* audio may be unavailable */ }
     },
     speak(text, voiceName) {
-      if (!enabled || !window.speechSynthesis || !text) return;
+      if (!speech || !window.speechSynthesis || !text) return;
       const u = new SpeechSynthesisUtterance(text);
       u.pitch = 1.45;
       u.rate = 1.05;
       u.volume = Math.min(1, volume * 1.8);
-      const v = speechSynthesis.getVoices().find((x) => x.name === voiceName);
-      if (v) u.voice = v;
-      speechSynthesis.cancel();
-      speechSynthesis.speak(u);
+      const go = () => {
+        const v = speechSynthesis.getVoices().find((x) => x.name === voiceName);
+        if (v) u.voice = v;
+        speechSynthesis.cancel();
+        speechSynthesis.speak(u);
+      };
+      // voices load lazily; wait briefly for them the first time
+      if (voiceName && !speechSynthesis.getVoices().length) {
+        const once = () => { speechSynthesis.removeEventListener('voiceschanged', once); go(); };
+        speechSynthesis.addEventListener('voiceschanged', once);
+        setTimeout(once, 1200);
+      } else go();
     },
   };
 })(window);

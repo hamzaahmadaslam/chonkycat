@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, screen, ipcMain, Tray, Menu, nativeImage, globalShortcut, shell } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, Tray, Menu, nativeImage, globalShortcut, shell, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { FILES, ensureHome, loadSettings, saveSettings, writeJSON, readJSON, HOME } = require('./shared/config');
@@ -83,8 +83,14 @@ function createOverlay() {
   if (process.platform === 'darwin') overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlay.setIgnoreMouseEvents(true, { forward: true });
   overlay.loadFile(path.join(__dirname, 'renderer', 'overlay.html'));
-  overlay.once('ready-to-show', () => overlay.showInactive());
+  overlay.once('ready-to-show', () => {
+    overlay.showInactive();
+    setTimeout(statsChanged, 4000); // celebrate anything unlocked while she was away
+  });
   overlay.on('closed', () => { overlay = null; });
+  // never navigate away from our own page (it holds the preload API)
+  overlay.webContents.on('will-navigate', (e) => e.preventDefault());
+  overlay.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlay.webContents.on('console-message', (e) => {
     const lvl = e.level != null ? e.level : '';
     if (lvl === 'error' || lvl === 'warning' || lvl === 2 || lvl === 3 || process.env.CHONKY_DEBUG) log('renderer', lvl, e.message, e.sourceId ? `${path.basename(e.sourceId)}:${e.lineNumber}` : '');
@@ -206,6 +212,8 @@ function openSettings() {
   });
   settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
   settingsWin.on('closed', () => { settingsWin = null; });
+  settingsWin.webContents.on('will-navigate', (e) => e.preventDefault());
+  settingsWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 }
 
 function applySettings(patch) {
@@ -251,7 +259,44 @@ function onFx(fx) {
   }
   if (fx.type === 'done' && settings.speakSummaries) fx.speak = true;
   send('fx', fx);
+  if (fx.type === 'needs' || fx.type === 'permission' || fx.type === 'danger') scheduleNeedsNotification(fx.session, fx.project);
+  statsChanged();
+}
+
+// Push fresh stats to the overlay and celebrate newly unlocked achievements.
+function statsChanged() {
+  for (const a of stats.checkAchievements()) send('fx', Object.assign({ type: 'achievement' }, a));
   send('stats', stats.get());
+}
+
+// When Claude has been waiting on you for a while and the cat may not be seen,
+// fall back to a system notification. Clicking it focuses the session's window.
+const notified = new Set();
+function scheduleNeedsNotification(sessionId, project) {
+  const mode = settings.notifications || 'hidden';
+  if (mode === 'off' || notified.has(sessionId)) return;
+  notified.add(sessionId);
+  setTimeout(() => {
+    const s = (lastStatus.sessions || []).find((x) => x.id === sessionId);
+    const waiting = s && (s.state === 'needs' || s.state === 'danger');
+    const catVisible = overlay && !overlay.isDestroyed() && overlay.isVisible();
+    if (!waiting) { notified.delete(sessionId); return; }
+    if (settings.dnd || (mode === 'hidden' && catVisible) || !Notification.isSupported()) return;
+    const n = new Notification({
+      title: `${settings.name}: ${project || 'Claude'} needs you`,
+      body: (s.pending && s.pending.summary) || s.detail || 'Claude is waiting for your answer.',
+      icon: path.join(__dirname, 'assets', 'icon.png'),
+      silent: !settings.sounds,
+    });
+    n.on('click', () => focusSession(project));
+    n.show();
+  }, 20000);
+}
+
+async function focusSession(project) {
+  if (!desktop || !settings.desktopAwareness) return false;
+  const w = await desktop.findSessionWindow(project);
+  return w ? desktop.focus(w) : false;
 }
 
 function minuteTick() {
@@ -262,7 +307,12 @@ function minuteTick() {
     workStreakMin = 0;
     send('fx', { type: 'break-time', minutes: settings.breakMinutes });
   }
-  send('stats', stats.get());
+  // the waiting-notification is one per needs episode; forget sessions that moved on
+  for (const id of [...notified]) {
+    const s = (lastStatus.sessions || []).find((x) => x.id === id);
+    if (!s || (s.state !== 'needs' && s.state !== 'danger')) notified.delete(id);
+  }
+  statsChanged();
   refreshTrayMenu();
 }
 
@@ -283,17 +333,21 @@ function wireIpc() {
     return moveToDisplay({ x: Math.round(pt.x + b.x), y: Math.round(pt.y + b.y) });
   });
   ipcMain.on('save-position', (_e, pos) => {
-    settings = saveSettings({ position: Object.assign({}, pos, { display: currentDisplayId }) });
+    try { settings = saveSettings({ position: Object.assign({}, pos, { display: currentDisplayId }) }); } catch (e) { log('save-position failed', e.message); }
   });
   ipcMain.on('permission-decision', (_e, { id, decision }) => server.resolve(id, decision === 'allow' || decision === 'deny' ? decision : null));
-  ipcMain.handle('feed', () => { const ok = stats.feed(); send('stats', stats.get()); refreshTrayMenu(); return ok; });
-  ipcMain.on('pet', () => { stats.bump('pets'); stats.adjustMood(0.02); });
+  ipcMain.handle('feed', () => { const ok = stats.feed(); statsChanged(); refreshTrayMenu(); return ok; });
+  ipcMain.on('pet', () => { stats.bump('pets'); stats.adjustMood(0.02); statsChanged(); });
+  ipcMain.handle('focus-session', (_e, project) => focusSession(String(project || '')));
+  ipcMain.handle('get-achievements', () => stats.achievements());
   ipcMain.on('open-settings', openSettings);
+  ipcMain.on('toggle-visible', toggleVisible);
   ipcMain.on('quit', () => app.quit());
   ipcMain.on('tray-icon', (_e, dataUrl) => buildTray(dataUrl));
   ipcMain.on('focus-overlay', (_e, on) => {
     if (!overlay) return;
     if (on) { overlay.setIgnoreMouseEvents(false); ignoring = false; overlay.focus(); }
+    else overlay.blur(); // hand keyboard focus back to whatever you were typing in
   });
   ipcMain.handle('ask', (_e, q) => answer(String(q || '').slice(0, 300), { settings, status: lastStatus, stats: stats.get() }));
   ipcMain.handle('fg-window', async () => {
@@ -331,10 +385,17 @@ function toLocal(w) {
 
 function sanitize(p) {
   const out = {};
-  const allowed = ['roam', 'name', 'skin', 'size', 'fps', 'sounds', 'volume', 'speakSummaries', 'voice', 'showStatusLine', 'pawApproval', 'pawApprovalTimeout', 'dangerGuard', 'randomAnimations', 'animationFrequency', 'desktopAwareness', 'runToWindow', 'perchOnWindows', 'cursorPlay', 'breakGuardian', 'breakMinutes', 'autoStart', 'launchAtLogin', 'hotkey', 'dnd', 'seasonal', 'cafe'];
+  const allowed = ['hat', 'notifications', 'roam', 'name', 'skin', 'size', 'fps', 'sounds', 'volume', 'speakSummaries', 'voice', 'showStatusLine', 'pawApproval', 'pawApprovalTimeout', 'dangerGuard', 'randomAnimations', 'animationFrequency', 'desktopAwareness', 'runToWindow', 'perchOnWindows', 'cursorPlay', 'breakGuardian', 'breakMinutes', 'autoStart', 'launchAtLogin', 'hotkey', 'dnd', 'seasonal', 'cafe'];
   for (const k of allowed) if (p && k in p) out[k] = p[k];
   if ('name' in out) out.name = String(out.name || 'Arshia').trim().slice(0, 24) || 'Arshia';
   if ('size' in out) out.size = Math.max(90, Math.min(420, Number(out.size) || 190));
+  if ('hat' in out) out.hat = out.hat && stats.unlockedHats().includes(out.hat) ? out.hat : '';
+  if ('notifications' in out) out.notifications = ['off', 'hidden', 'always'].includes(out.notifications) ? out.notifications : 'hidden';
+  const num = (k, lo, hi, def) => { if (k in out) { const v = Number(out[k]); out[k] = Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : def; } };
+  num('volume', 0, 1, 0.45);
+  num('animationFrequency', 0.3, 3, 1);
+  num('pawApprovalTimeout', 5, 110, 25);
+  num('breakMinutes', 15, 300, 90);
   if ('fps' in out) out.fps = [20, 24, 30, 45, 60].includes(Number(out.fps)) ? Number(out.fps) : 24;
   return out;
 }
@@ -350,21 +411,27 @@ app.whenReady().then(async () => {
   } catch (e) {
     log('server failed', e.message);
   }
-  writeJSON(FILES.runtime, { port: server.port, token: server.token, pid: process.pid, started: Date.now(), version: app.getVersion() });
-  writeJSON(path.join(HOME, 'launch.json'), { command: process.execPath, args: process.defaultApp ? [app.getAppPath()] : [] });
+  try {
+    writeJSON(FILES.runtime, { port: server.port, token: server.token, pid: process.pid, started: Date.now(), version: app.getVersion() });
+    writeJSON(path.join(HOME, 'launch.json'), { command: process.execPath, args: process.defaultApp ? [app.getAppPath()] : [] });
+  } catch (e) {
+    log('could not write runtime files', e.message); // keep going: the cat still works, hooks retry
+  }
 
   server.on('event', (ev) => {
     if (process.env.CHONKY_DEBUG) log('event', ev.hook_event_name, ev.tool_name || '', ev.notification_type || '', ev.agent_type || '');
     sessions.handle(ev);
   });
   server.on('permission', ({ id, ev }) => {
-    if (settings.dnd) return server.resolve(id, null);
+    // nobody can click the card if the cat is hidden or reloading: hand back to Claude at once
+    if (settings.dnd || !overlay || overlay.isDestroyed() || !overlay.isVisible() || overlay.webContents.isLoading()) return server.resolve(id, null);
     send('permission', { id, tool: ev.tool_name, input: ev.tool_input, project: path.basename(ev.cwd || ''), timeout: settings.pawApprovalTimeout });
   });
   server.on('permission-resolved', (r) => send('permission-resolved', r));
   server.on('control', (c) => {
     const action = c && c.action;
     if (action === 'settings') openSettings();
+    else if (action === 'quit') setTimeout(() => app.quit(), 50);
     else if (action === 'show') { if (overlay) { overlay.showInactive(); send('fx', { type: 'hello' }); } }
     else if (action === 'hide') { if (overlay) overlay.hide(); }
     else if (action === 'fx' && typeof c.type === 'string') send('fx', Object.assign({ preview: true, project: 'cli' }, c, { type: c.type }));
@@ -383,7 +450,15 @@ app.whenReady().then(async () => {
   buildTray(null);
   setInterval(pollCursor, 33);
   setInterval(minuteTick, 60000);
-  screen.on('display-removed', () => { if (overlay) overlay.setBounds(screen.getPrimaryDisplay().workArea); });
+  const toPrimary = () => {
+    if (!overlay) return;
+    const p = screen.getPrimaryDisplay();
+    currentDisplayId = p.id;
+    viewport = null;
+    overlay.setBounds(p.workArea);
+    send('bounds', p.workArea);
+  };
+  screen.on('display-removed', (_e, d) => { if (d.id === currentDisplayId) toPrimary(); });
   screen.on('display-metrics-changed', () => {
     if (!overlay) return;
     const d = screen.getAllDisplays().find((x) => x.id === currentDisplayId) || screen.getPrimaryDisplay();

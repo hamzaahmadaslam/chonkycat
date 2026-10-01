@@ -22,13 +22,14 @@ const mode = process.argv[2] || 'event';
 const readJSON = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 const settings = Object.assign({ autoStart: true, pawApproval: false, pawApprovalTimeout: 25, dangerGuard: true, dnd: false, name: 'Arshia' }, readJSON(path.join(HOME, 'settings.json')) || {});
 
+let truncated = false;
 function readStdin(maxMs) {
   return new Promise((resolve) => {
     if (process.stdin.isTTY) return resolve('');
     let data = '';
     const timer = setTimeout(() => resolve(data), maxMs);
     process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (c) => { data += c; if (data.length > 4 * 1024 * 1024) { clearTimeout(timer); resolve(data); } });
+    process.stdin.on('data', (c) => { data += c; if (data.length > 4 * 1024 * 1024) { clearTimeout(timer); truncated = true; resolve(data); } });
     process.stdin.on('end', () => { clearTimeout(timer); resolve(data); });
     process.stdin.on('error', () => { clearTimeout(timer); resolve(data); });
   });
@@ -70,7 +71,17 @@ function post(rt, route, body, timeoutMs) {
   });
 }
 
+function pluginVersion() {
+  const p = readJSON(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'));
+  return (p && p.version) || 'latest';
+}
+
 function launchApp() {
+  const lock = path.join(HOME, 'launch.lock');
+  try {
+    if (Date.now() - fs.statSync(lock).mtimeMs < 60000) return true; // someone is already launching
+  } catch {}
+  try { fs.mkdirSync(HOME, { recursive: true }); fs.writeFileSync(lock, String(process.pid)); } catch {}
   const launch = readJSON(path.join(HOME, 'launch.json'));
   try {
     let child;
@@ -83,7 +94,7 @@ function launchApp() {
     } else {
       // never installed locally yet — fetch & start the published app
       const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-      child = spawn(npx, ['-y', 'chonkycat', 'start'], { detached: true, stdio: ['ignore', out, out], shell: process.platform === 'win32', windowsHide: true, env });
+      child = spawn(npx, ['-y', `chonkycat@${pluginVersion()}`, 'start'], { detached: true, stdio: ['ignore', out, out], shell: process.platform === 'win32', windowsHide: true, env });
     }
     child.unref();
     return true;
@@ -98,7 +109,14 @@ async function main() {
   if (mode === 'launch') { launchApp(); return; }
   const raw = await readStdin(mode === 'event' ? 3000 : 2000);
   let ev;
-  try { ev = JSON.parse(raw); } catch { return; }
+  try { ev = JSON.parse(raw); } catch {
+    if (mode === 'guard' && truncated) {
+      // huge payload: scan the command text directly rather than failing open
+      const m = raw.match(/"command"\s*:\s*"((?:[^"\\]|\\.){0,16384})/);
+      if (m) ev = { tool_input: { command: m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') } };
+    }
+    if (!ev) return;
+  }
   if (!ev || typeof ev !== 'object') return;
 
   if (mode === 'guard') {
@@ -119,9 +137,18 @@ async function main() {
   const rt = readJSON(path.join(HOME, 'runtime.json'));
 
   if (mode === 'permission') {
-    if (!settings.pawApproval || settings.dnd || !rt) return; // fall back to Claude's own prompt
+    if (!rt) return;
+    if (!settings.pawApproval || settings.dnd) {
+      // let the cat react to the prompt, then fall back to Claude's own dialog
+      await post(rt, '/event', slim(ev), 800);
+      return;
+    }
     const timeout = Math.max(5, Math.min(110, Number(settings.pawApprovalTimeout) || 25));
-    const res = await post(rt, `/permission?timeout=${timeout}`, slim(ev), (timeout + 5) * 1000);
+    const full = slim(ev);
+    const cmd = ev.tool_input && typeof ev.tool_input.command === 'string' ? ev.tool_input.command : null;
+    if (cmd) { full.tool_input.command = cmd.slice(0, 20000); if (cmd.length > 20000) full.tool_input.__truncated = true; }
+    else if (ev.tool_input && JSON.stringify(ev.tool_input).length > 600) full.tool_input.__truncated = true;
+    const res = await post(rt, `/permission?timeout=${timeout}`, full, (timeout + 5) * 1000);
     const behavior = res.ok && res.body && res.body.behavior;
     if (behavior === 'allow' || behavior === 'deny') {
       const decision = { behavior };

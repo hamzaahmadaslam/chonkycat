@@ -345,20 +345,24 @@
    * returns anchors for speech bubbles etc.
    */
   function draw(ctx, opts) {
-    const S = typeof opts.skin === 'string' ? SKINS[opts.skin] || SKINS.tabby : opts.skin || SKINS.tabby;
+    // never trust inputs: a NaN reaching a gradient throws and would blank the cat
+    const num = (v, d) => (v != null && Number.isFinite(+v) ? +v : d);
+    const S = typeof opts.skin === 'string' ? SKINS[opts.skin] || SKINS.tabby : Object.assign({}, SKINS.tabby, opts.skin || {});
+    const skinKey = typeof opts.skin === 'string' ? opts.skin : S.label || 'custom';
+    const headDrop = num(opts.headDrop, 0);
     const t = opts.t || 0;
-    const fat = clamp(opts.fat == null ? 0.25 : opts.fat, 0, 1);
+    const fat = clamp(num(opts.fat, 0.25), 0, 1);
     const state = opts.state || 'idle';
     const pose = opts.pose || (state === 'sleep' ? 'sleep' : 'sit');
     const sleepy = pose === 'sleep';
     const walking = pose === 'walk';
     const puff = state === 'danger';
-    const look = opts.look || { x: 0, y: 0 };
+    const look = { x: clamp(num(opts.look && opts.look.x, 0), -1.5, 1.5), y: clamp(num(opts.look && opts.look.y, 0), -1.5, 1.5) };
     const OW = 6;
     const ks = opts.kitten ? 0.62 : 1;
     const hk = opts.kitten ? 0.86 : 1;
-    const tilt = opts.headTilt || 0;
-    const raises = [].concat(opts.raise || []);
+    const tilt = clamp(num(opts.headTilt, 0), -1, 1);
+    const raises = [].concat(opts.raise || []).filter((r) => r && (r.kind || (Number.isFinite(+r.x) && Number.isFinite(+r.y))));
     if (opts.wave > 0) raises.push({ side: 1, kind: 'wave' });
     if (opts.knock > 0) raises.push({ side: 1, kind: 'knock' });
     const raisedSide = (sd) => raises.some((r) => (r.side || 1) === sd);
@@ -371,9 +375,10 @@
     const bob = walking ? Math.abs(Math.sin(wp * TAU)) * 6 : 0;
 
     // ---- geometry (b = breath, lx/ly = gaze); rest geometry feeds the layer cache
-    const geom = (b, lx, ly) => {
-      let brx = (98 + fat * 44) * ks + b * 1.6 + (puff ? 10 : 0);
-      let bry = (76 + fat * 16) * ks + b * 1.4 + (puff ? 6 : 0);
+    const geom = (b, lx, ly, live) => {
+      const jig = live ? opts.jiggle || 0 : 0; // belly wobble keeps volume: wider when shorter
+      let brx = (98 + fat * 44) * ks + b * 1.6 + (puff ? 10 : 0) + jig;
+      let bry = (76 + fat * 16) * ks + b * 1.4 + (puff ? 6 : 0) - jig * 0.6;
       if (sleepy) { brx += 14; bry -= 12; }
       const bottom = GROUND - bob;
       const bcx = CX;
@@ -381,18 +386,19 @@
       const btop = bcy - bry;
       const hrx = (90 + fat * 10) * hk + (puff ? 6 : 0);
       const hry = (72 + fat * 3) * hk;
-      const hcx = CX + lx * 4 + waddle * 3;
-      const hcy = btop - 4 - b * 1.2 + (sleepy ? 26 : 0) + ly * 3 + (opts.headDrop || 0);
+      const ho = live && opts.headOffset ? opts.headOffset : { x: 0, y: 0 };
+      const hcx = CX + lx * 4 + waddle * 3 + ho.x;
+      const hcy = btop - 4 - b * 1.2 + (sleepy ? 26 : 0) + ly * 3 + headDrop + ho.y;
       const htop = hcy - hry;
       const fx = hcx + lx * 7; // facial features shift more → parallax
       const fy = hcy + ly * 5;
       return { brx, bry, bottom, bcx, bcy, btop, hrx, hry, hcx, hcy, htop, fx, fy };
     };
-    const G = geom(br, look.x, look.y);
+    const G = geom(br, look.x, look.y, true);
     const { brx, bry, bottom, bcx, bcy, btop, hrx, hry, hcx, hcy, htop, fx, fy } = G;
     const cache = opts.cache || null;
-    const baseScale = cache ? (() => { const m = ctx.getTransform(); return Math.round(Math.hypot(m.a, m.b) * 1000) / 1000; })() : 1;
-    const canCache = !!cache && !walking && !puff && !opts.pawLift;
+    const baseScale = cache ? (() => { const m = ctx.getTransform(); return Math.min(4, Math.round(Math.hypot(m.a, m.b) * 1000) / 1000); })() : 1;
+    const canCache = !!cache && baseScale > 0.01 && !walking && !puff && !opts.pawLift;
     const R = canCache ? geom(0, 0, 0) : G;
     const pawRamp = [S.cream[0], S.cream[1], S.cream[2], S.cream[2]];
 
@@ -409,6 +415,10 @@
       ctx.beginPath();
       ctx.ellipse(CX + 6, GROUND + 4, brx + 40, 16, 0, 0, TAU);
       ctx.fill();
+      if (!sleepy && opts.pose !== 'walk') {
+        ctx.fillStyle = 'rgba(40, 18, 6, 0.18)';
+        for (const sd of [-1, 1]) { ctx.beginPath(); ctx.ellipse(CX + sd * 27 * ks, GROUND + 1, 24 * ks, 5, 0, 0, TAU); ctx.fill(); }
+      }
     }
 
     if (walking) {
@@ -427,6 +437,17 @@
       TP = [[bcx + brx - 30, bottom - 16], [bcx + brx + 18, bottom + 6], [bcx + 40, bottom + 20], [bcx - 40 + sway * 0.3, bottom + 4]];
     } else if (puff) {
       TP = [[bcx + brx - 30, bottom - 20], [bcx + brx + 30, bottom - 30], [bcx + brx + 34, btop - 10], [bcx + brx + 22, btop - 60]];
+    } else if (opts.tailUp != null) {
+      // body language: low = anxious, high with a hooked tip = happy; flicking tip = hunting/annoyed
+      const up = clamp(opts.tailUp, 0, 1);
+      const sw = Math.sin(t * tailSpeed) * 14 * (opts.tailSway != null ? opts.tailSway : 1) + (opts.tailLag || 0);
+      const tip = Math.sin(t * 15) * 12 * (opts.tailFlick || 0);
+      TP = [
+        [bcx + brx - 30, bottom - 20],
+        [bcx + brx + lerp(48, 42, up), lerp(bottom - 4, bottom - 14, up)],
+        [bcx + brx + lerp(70, 52, up) + sw * 0.6, lerp(bottom - 10, btop - 6, up)],
+        [bcx + brx + lerp(78, 22, up) + sw * lerp(0.5, 1.5, up) + tip * 0.6, lerp(bottom - 30, btop - 44 - 14 * up, up) + tip * (1 - up)],
+      ];
     } else {
       TP = [[bcx + brx - 30, bottom - 20], [bcx + brx + 42, bottom - 14], [bcx + brx + 52 + sway, btop - 6], [bcx + brx + 24 + sway * 1.5, btop - 44]];
     }
@@ -601,7 +622,7 @@
       ctx.translate(bcx, bottom);
       ctx.scale(brx / R.brx, bry / R.bry);
       ctx.translate(-bcx, -bottom);
-      cachedLayer(ctx, cache, ['B', S.label, Math.round(fat * 40), sleepy, !!opts.kitten, opts.paws || '', twoPawProp, raisedSide(-1), raisedSide(1)].join('|'), (c) => bodyLayer(c, R), baseScale);
+      cachedLayer(ctx, cache, ['B', skinKey, Math.round(fat * 40), headDrop, sleepy, !!opts.kitten, opts.paws || '', twoPawProp, raisedSide(-1), raisedSide(1)].join('|'), (c) => bodyLayer(c, R), baseScale);
       ctx.restore();
     } else bodyLayer(ctx, G);
 
@@ -646,60 +667,6 @@
     };
     const headLayer = (ctx, g) => {
       const { hcx, hcy, hrx, hry, htop, fx, fy } = g;
-      // ---- ears
-      const earPose = opts.ears || (puff ? 'flat' : sleepy ? 'droop' : 'up');
-      const twitch = state === 'idle' && t % 6.2 < 0.25 ? 1 : 0;
-      for (const s of [-1, 1]) {
-        const A = [hcx + s * 84 * hk, hcy - 26 * hk];
-        const B = [hcx + s * 22 * hk, htop + 6];
-        let T;
-        if (earPose === 'flat') T = [hcx + s * 132, htop + 22];
-        else if (earPose === 'droop') T = [hcx + s * 96, htop - 26];
-        else if (earPose === 'perk') T = [hcx + s * 68 * hk, htop - 62 * hk];
-        else if (earPose === 'back') T = [hcx + s * 116, htop - 6];
-        else if (earPose === 'one') T = s < 0 ? [hcx - 72 * hk, htop - 48 * hk] : [hcx + 110, htop - 10];
-        else       T = [hcx + s * (72 + (s > 0 ? twitch * 8 : 0)) * hk, htop - 48 * hk + (s > 0 ? twitch * 6 : 0)];
-        const earPath = (A, B, T, bulge) => () => {
-          const A1 = [lerp(A[0], T[0], 0.86), lerp(A[1], T[1], 0.86)];
-          const B1 = [lerp(B[0], T[0], 0.86), lerp(B[1], T[1], 0.86)];
-          const cA = [lerp(A[0], T[0], 0.5) + s * bulge, lerp(A[1], T[1], 0.5)];
-          const cB = [lerp(B[0], T[0], 0.5) - s * bulge * 0.4, lerp(B[1], T[1], 0.5)];
-          ctx.beginPath();
-          ctx.moveTo(A[0], A[1]);
-          ctx.quadraticCurveTo(cA[0], cA[1], A1[0], A1[1]);
-          ctx.quadraticCurveTo(T[0], T[1], B1[0], B1[1]);
-          ctx.quadraticCurveTo(cB[0], cB[1], B[0], B[1]);
-          ctx.closePath();
-        };
-        const ep = earPath(A, B, T, 10);
-        const ramp = S.patches && s < 0 ? [S.patches.orange[0], S.patches.orange[1], S.patches.orange[2], S.patches.orange[2]] : S.fur;
-        const eg = ctx.createLinearGradient(T[0], T[1], (A[0] + B[0]) / 2, A[1]);
-        eg.addColorStop(0, ramp[s < 0 ? 0 : 1]);
-        eg.addColorStop(1, ramp[s < 0 ? 1 : 2]);
-        part(ctx, ep, eg, S, OW, () => {
-          const c = [(A[0] + B[0] + T[0]) / 3, (A[1] + B[1] + T[1]) / 3 + 8];
-          const sh = (p, k) => [c[0] + (p[0] - c[0]) * k, c[1] + (p[1] - c[1]) * k];
-          const ip = earPath(sh(A, 0.62), sh(B, 0.62), sh(T, 0.62), 4);
-          ip();
-          const ig = ctx.createLinearGradient(T[0], T[1], c[0], c[1] + 20);
-          ig.addColorStop(0, S.earInner[1]);
-          ig.addColorStop(1, S.earInner[0]);
-          ctx.fillStyle = ig;
-          ctx.fill();
-          // white fluff tufts in the ear
-          ctx.strokeStyle = 'rgba(255, 252, 245, 0.95)';
-          ctx.lineWidth = 2.4;
-          for (let k = 0; k < 4; k++) {
-            const bx = lerp(A[0], B[0], 0.25 + k * 0.12);
-            const by = lerp(A[1], B[1], 0.25 + k * 0.12) + 4;
-            ctx.beginPath();
-            ctx.moveTo(bx, by);
-            ctx.quadraticCurveTo(bx + s * 4, by - 14, lerp(bx, T[0], 0.35), lerp(by, T[1], 0.35));
-            ctx.stroke();
-          }
-        });
-      }
-
       // ---- head
       const cheekFluff = puff
         ? { fluff: 0.08, tufts: 34, phase: t * 3 }
@@ -764,13 +731,96 @@
       });
 
     };
+    const drawEars = (ctx, g) => {
+      const { hcx, hcy, htop } = g;
+      // ---- ears
+      const earPose = opts.ears || (puff ? 'flat' : sleepy ? 'droop' : 'up');
+      const twitch = state === 'idle' && t % 6.2 < 0.25 ? 1 : 0;
+      for (const s of [-1, 1]) {
+        const A = [hcx + s * 84 * hk, hcy - 26 * hk];
+        const B = [hcx + s * 22 * hk, htop + 6];
+        let T;
+        if (opts.earAngle != null && earPose !== 'one' && earPose !== 'droop') {
+          // continuous ears: -1 flat, -0.5 back, 0 neutral, 1 perked; plus a little wobble
+          const a = clamp(opts.earAngle, -1, 1);
+          const K = [[-1, 132, 22], [-0.5, 116, -6], [0, 72, -48], [1, 66, -64]];
+          let i = 0;
+          while (i < K.length - 2 && a > K[i + 1][0]) i++;
+          const u = (a - K[i][0]) / (K[i + 1][0] - K[i][0]);
+          const w = opts.earWobble || 0;
+          const tx = lerp(K[i][1], K[i + 1][1], u) * (a >= 0 ? hk : 1) + s * w * 7;
+          const ty = lerp(K[i][2], K[i + 1][2], u) * (a >= 0 ? hk : 1) + Math.abs(w) * 5;
+          T = [hcx + s * tx + (s > 0 ? twitch * 8 : 0), htop + ty + (s > 0 ? twitch * 6 : 0)];
+        } else if (earPose === 'flat') T = [hcx + s * 132, htop + 22];
+        else if (earPose === 'droop') T = [hcx + s * 96, htop - 26];
+        else if (earPose === 'perk') T = [hcx + s * 68 * hk, htop - 62 * hk];
+        else if (earPose === 'back') T = [hcx + s * 116, htop - 6];
+        else if (earPose === 'one') T = s < 0 ? [hcx - 72 * hk, htop - 48 * hk] : [hcx + 110, htop - 10];
+        else       T = [hcx + s * (72 + (s > 0 ? twitch * 8 : 0)) * hk, htop - 48 * hk + (s > 0 ? twitch * 6 : 0)];
+        const earPath = (A, B, T, bulge) => () => {
+          const A1 = [lerp(A[0], T[0], 0.86), lerp(A[1], T[1], 0.86)];
+          const B1 = [lerp(B[0], T[0], 0.86), lerp(B[1], T[1], 0.86)];
+          const cA = [lerp(A[0], T[0], 0.5) + s * bulge, lerp(A[1], T[1], 0.5)];
+          const cB = [lerp(B[0], T[0], 0.5) - s * bulge * 0.4, lerp(B[1], T[1], 0.5)];
+          ctx.beginPath();
+          ctx.moveTo(A[0], A[1]);
+          ctx.quadraticCurveTo(cA[0], cA[1], A1[0], A1[1]);
+          ctx.quadraticCurveTo(T[0], T[1], B1[0], B1[1]);
+          ctx.quadraticCurveTo(cB[0], cB[1], B[0], B[1]);
+          ctx.closePath();
+        };
+        const ep = earPath(A, B, T, 10);
+        const ramp = S.patches && s < 0 ? [S.patches.orange[0], S.patches.orange[1], S.patches.orange[2], S.patches.orange[2]] : S.fur;
+        const eg = ctx.createLinearGradient(T[0], T[1], (A[0] + B[0]) / 2, A[1]);
+        eg.addColorStop(0, ramp[s < 0 ? 0 : 1]);
+        eg.addColorStop(1, ramp[s < 0 ? 1 : 2]);
+        part(ctx, ep, eg, S, OW, () => {
+          const c = [(A[0] + B[0] + T[0]) / 3, (A[1] + B[1] + T[1]) / 3 + 8];
+          const sh = (p, k) => [c[0] + (p[0] - c[0]) * k, c[1] + (p[1] - c[1]) * k];
+          const ip = earPath(sh(A, 0.62), sh(B, 0.62), sh(T, 0.62), 4);
+          ip();
+          const ig = ctx.createLinearGradient(T[0], T[1], c[0], c[1] + 20);
+          ig.addColorStop(0, S.earInner[1]);
+          ig.addColorStop(1, S.earInner[0]);
+          ctx.fillStyle = ig;
+          ctx.fill();
+          // white fluff tufts in the ear
+          ctx.strokeStyle = 'rgba(255, 252, 245, 0.95)';
+          ctx.lineWidth = 2.4;
+          for (let k = 0; k < 4; k++) {
+            const bx = lerp(A[0], B[0], 0.25 + k * 0.12);
+            const by = lerp(A[1], B[1], 0.25 + k * 0.12) + 4;
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.quadraticCurveTo(bx + s * 4, by - 14, lerp(bx, T[0], 0.35), lerp(by, T[1], 0.35));
+            ctx.stroke();
+          }
+        });
+      }
+
+    };
     tiltOn();
+    drawEars(ctx, G);
     if (canCache) {
       ctx.save();
       ctx.translate(hcx - R.hcx, hcy - R.hcy);
-      cachedLayer(ctx, cache, ['H', S.label, Math.round(fat * 40), sleepy, puff, !!opts.kitten, opts.ears || '', state === 'idle' && t % 6.2 < 0.25, opts.prop === 'laptop'].join('|'), (c) => headLayer(c, R), baseScale);
+      cachedLayer(ctx, cache, ['H', skinKey, Math.round(fat * 40), headDrop, sleepy, puff, !!opts.kitten, opts.prop === 'laptop'].join('|'), (c) => headLayer(c, R), baseScale);
       ctx.restore();
     } else headLayer(ctx, G);
+    if (!sleepy) {
+      // three little tufts on top of her head that lag behind head motion
+      const sway2 = Math.sin(t * 2.1) * 2 + (opts.headOffset ? -opts.headOffset.x * 1.5 : 0);
+      ctx.save();
+      ctx.lineCap = 'round';
+      for (const [ox, h, bend] of [[-9, 16, -5], [0, 22, 1], [9, 14, 6]]) {
+        const bx = hcx + ox * hk, by = htop + 6;
+        const tx = bx + bend + sway2, ty = by - h * hk;
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.quadraticCurveTo(bx + bend * 0.2, by - h * 0.6, tx, ty);
+        ctx.lineWidth = 8; ctx.strokeStyle = S.outline; ctx.stroke();
+        ctx.lineWidth = 4.5; ctx.strokeStyle = S.fur[1]; ctx.stroke();
+      }
+      ctx.restore();
+    }
     ctx.restore();
 
     // ---- bell (in front of the head)
@@ -806,7 +856,7 @@
     if (opts.prop) {
       const small = opts.kitten && opts.prop !== 'box';
       if (small) { ctx.save(); ctx.translate(CX, bottom); ctx.scale(0.68, 0.68); ctx.translate(-CX, -bottom); }
-      drawProp(ctx, S, opts.prop, { t, bottom, hcx, hcy: small ? hcy + 40 : hcy, hry, brx, fx, fy, pawRamp, OW, stamped: opts.stamped || 0 });
+      drawProp(ctx, S, opts.prop, { t, bottom, hcx, hcy: small ? hcy + 40 : hcy, hry, brx, fx, fy, pawRamp, OW, stamped: opts.stamped || 0, full: opts.full || 0 });
       if (small) ctx.restore();
     }
 
@@ -1151,6 +1201,33 @@
       ctx.restore();
     } else if (prop === 'package') {
       drawParcel(ctx, S, CX - brx - 52, bottom - 36, 1, G.stamped);
+    } else if (prop === 'bowl') {
+      // food bowl beside her paws; G.full (0..1) is how much kibble is in it
+      const x = CX - brx - 30, y = bottom - 4;
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = S.outline;
+      if (G.full > 0) {
+        ctx.fillStyle = '#C9824A';
+        for (let i = 0; i < 9; i++) {
+          const a = (i / 9) * Math.PI;
+          ctx.beginPath();
+          ctx.arc(x + Math.cos(a) * 22, y - 24 - Math.sin(a) * 8 * G.full, 6, 0, TAU);
+          ctx.fill();
+        }
+      }
+      ctx.beginPath();
+      ctx.moveTo(x - 40, y - 28);
+      ctx.quadraticCurveTo(x, y - 34, x + 40, y - 28);
+      ctx.lineTo(x + 30, y);
+      ctx.lineTo(x - 30, y);
+      ctx.closePath();
+      const g = ctx.createLinearGradient(0, y - 30, 0, y);
+      g.addColorStop(0, '#FF8FA8');
+      g.addColorStop(1, '#D9577A');
+      ctx.fillStyle = g;
+      ctx.stroke();
+      ctx.fill();
+      drawFish(ctx, x, y - 14, 0.42, 0);
     }
     ctx.restore();
   }
@@ -1272,6 +1349,90 @@
       ctx.restore();
       ctx.fillStyle = '#7AD3FF';
       ctx.beginPath(); ctx.arc(0, -86, 10 + Math.sin(t * 6) * 1.5, 0, TAU); ctx.stroke(); ctx.fill();
+      ctx.restore();
+    } else if (kind === 'bow') {
+      // big ribbon bow by the left ear
+      ctx.save();
+      ctx.translate(hcx - 46, htop + 6);
+      ctx.rotate(-0.25 + Math.sin(t * 2) * 0.03);
+      ctx.fillStyle = '#FF6FA0';
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.bezierCurveTo(s * 18, -26, s * 46, -18, s * 40, 2);
+        ctx.bezierCurveTo(s * 46, 22, s * 18, 26, 0, 0);
+        ctx.closePath();
+        ctx.stroke(); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+        ctx.beginPath(); ctx.ellipse(s * 26, -8, 7, 4, s * 0.4, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#FF6FA0';
+      }
+      ctx.fillStyle = '#E24D84';
+      ctx.beginPath(); ctx.arc(0, 0, 10, 0, TAU); ctx.stroke(); ctx.fill();
+      ctx.restore();
+    } else if (kind === 'wizard') {
+      ctx.save();
+      ctx.translate(hcx + 8, htop + 16);
+      ctx.rotate(0.12);
+      const g = ctx.createLinearGradient(0, -110, 0, 0);
+      g.addColorStop(0, '#9B7BFF');
+      g.addColorStop(1, '#5A3FC0');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(-46, 0);
+      ctx.quadraticCurveTo(-8, -40, 10 + Math.sin(t * 1.6) * 6, -112);
+      ctx.quadraticCurveTo(20, -40, 46, 0);
+      ctx.closePath();
+      ctx.stroke(); ctx.fill();
+      ctx.fillStyle = '#4A32A0';
+      ctx.beginPath(); ctx.ellipse(0, 0, 70, 13, 0, 0, TAU); ctx.stroke(); ctx.fill();
+      for (const [x, y, r] of [[-12, -30, 6], [10, -58, 5], [-2, -82, 4]]) star4(ctx, x, y, r + Math.sin(t * 4 + x) * 1.2, '#FFE58A');
+      ctx.restore();
+    } else if (kind === 'beanie') {
+      ctx.save();
+      const g = ctx.createLinearGradient(0, htop - 40, 0, htop + 20);
+      g.addColorStop(0, '#5FC4BD');
+      g.addColorStop(1, '#2F8F89');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(hcx - 62, htop + 20);
+      ctx.bezierCurveTo(hcx - 60, htop - 46, hcx + 60, htop - 46, hcx + 62, htop + 20);
+      ctx.closePath();
+      ctx.stroke(); ctx.fill();
+      ctx.strokeStyle = 'rgba(20, 90, 85, 0.5)';
+      ctx.lineWidth = 3;
+      for (let k = -3; k <= 3; k++) { ctx.beginPath(); ctx.moveTo(hcx + k * 15, htop + 8); ctx.lineTo(hcx + k * 12, htop - 22); ctx.stroke(); }
+      ctx.strokeStyle = S.outline;
+      ctx.lineWidth = 5;
+      ctx.fillStyle = '#E9F7F5';
+      roundRect(ctx, hcx - 66, htop + 6, 132, 22, 10); ctx.stroke(); ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      shapePath(ctx, hcx, htop - 36, 16, 14, { fluff: 0.2, tufts: 14 }); ctx.stroke(); ctx.fill();
+      ctx.restore();
+    } else if (kind === 'headphones') {
+      // coder headphones: band over the head, cups over the ears' base
+      ctx.save();
+      ctx.lineWidth = 12;
+      ctx.strokeStyle = S.outline;
+      ctx.beginPath(); ctx.arc(hcx, htop + 60, 88, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = '#3C4250';
+      ctx.beginPath(); ctx.arc(hcx, htop + 60, 88, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke();
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = S.outline;
+      for (const s of [-1, 1]) {
+        const g = ctx.createLinearGradient(0, htop + 20, 0, htop + 80);
+        g.addColorStop(0, '#FF8A65');
+        g.addColorStop(1, '#D9522B');
+        ctx.fillStyle = g;
+        roundRect(ctx, hcx + s * 84 - 15, htop + 30, 30, 50, 12); ctx.stroke(); ctx.fill();
+      }
+      // little music notes when she's grooving
+      if (Math.sin(t * 2) > 0.6) {
+        ctx.fillStyle = '#7A6CFF';
+        ctx.font = 'bold 22px "Segoe UI Symbol", sans-serif';
+        ctx.fillText('♪', hcx + 100, htop + 20 - (t % 1) * 20);
+      }
       ctx.restore();
     } else if (kind === 'crown') {
       const w = 76, y = htop + 12;
@@ -1479,11 +1640,20 @@
     else if (blink) eye = 'blink';
     else if (state === 'working') eye = 'focus';
     if (opts.eyes) eye = opts.eyes;
+    // dynamic mode: the renderer drives blinking/half-lids through a continuous lid value
+    let lid = 0;
+    if (typeof opts.lid === 'number') {
+      if (eye === 'blink' || eye === 'focus' || eye === 'open') eye = 'open';
+      if (eye === 'half') eye = 'open';
+      lid = clamp(opts.lid, 0, 1);
+      if (opts.eyes === 'half') lid = Math.max(lid, 0.45);
+      if (opts.eyes === 'focus') lid = Math.max(lid, 0.38);
+    }
 
     const ex = 40, ey = fy + 4;
     const lx = state === 'thinking' ? -3 : look.x * 3;
     const ly = state === 'thinking' ? -5 : state === 'working' ? 4 : look.y * 3;
-    for (const s of [-1, 1]) drawEye(ctx, S, fx + s * ex, ey, s, eye, lx, ly, t);
+    for (const s of [-1, 1]) drawEye(ctx, S, fx + s * ex, ey, s, eye, lx, ly, t, lid, opts.pupil || 1);
 
     // blush with little anime hatching
     for (const s of [-1, 1]) {
@@ -1560,7 +1730,10 @@
     ctx.closePath();
   }
 
-  function drawEye(ctx, S, x, y, side, mode, lx, ly, t) {
+  function drawEye(ctx, S, x, y, side, mode, lx, ly, t, lid, pupil) {
+    lid = lid || 0;
+    pupil = pupil || 1;
+    if (lid > 0.9 && (mode === 'open' || mode === 'wide')) mode = 'blink';
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -1642,8 +1815,18 @@
     // pupil
     ctx.fillStyle = S.pupil;
     ctx.beginPath();
-    ctx.ellipse(x + lx, y + ly - 2, rx * 0.5, ry * 0.62, 0, 0, TAU);
+    ctx.ellipse(x + lx, y + ly - 2, rx * 0.5 * pupil, ry * (0.56 + 0.06 * pupil), 0, 0, TAU);
     ctx.fill();
+    // iris texture: fine radial strands around the pupil
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+    ctx.lineWidth = 1.2;
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * TAU;
+      ctx.beginPath();
+      ctx.moveTo(x + lx + Math.cos(a) * rx * 0.55 * pupil, y + ly - 2 + Math.sin(a) * ry * 0.5);
+      ctx.lineTo(x + lx + Math.cos(a) * rx * 0.95, y + ly - 2 + Math.sin(a) * ry * 0.92);
+      ctx.stroke();
+    }
     // highlights
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
@@ -1657,6 +1840,19 @@
     if (mode === 'focus') {
       ctx.fillStyle = S.fur[1];
       ctx.fillRect(x - rx - 4, y - ry - 6, rx * 2 + 8, ry * 0.85);
+    }
+    let lidY = null;
+    if (lid > 0.02 && mode !== 'focus' && mode !== 'angry') {
+      // upper lid slides down; its edge curves like a real eyelid
+      lidY = y - ry * 1.15 + lid * ry * 2.3;
+      ctx.fillStyle = S.fur[1];
+      ctx.beginPath();
+      ctx.moveTo(x - rx - 6, y - ry - 10);
+      ctx.lineTo(x + rx + 6, y - ry - 10);
+      ctx.lineTo(x + rx + 6, lidY);
+      ctx.quadraticCurveTo(x, lidY + ry * 0.35 * (1 - lid * 0.6), x - rx - 6, lidY);
+      ctx.closePath();
+      ctx.fill();
     }
     if (mode === 'angry') {
       ctx.fillStyle = S.fur[1];
@@ -1672,7 +1868,9 @@
     // lid line + lash flick
     ctx.lineWidth = 5;
     ctx.strokeStyle = S.outline;
-    if (mode === 'focus') {
+    if (lidY != null && lid > 0.12) {
+      ctx.beginPath(); ctx.moveTo(x - rx - 2, lidY); ctx.quadraticCurveTo(x, lidY + ry * 0.35 * (1 - lid * 0.6), x + rx + 2, lidY); ctx.stroke();
+    } else if (mode === 'focus') {
       ctx.beginPath(); ctx.moveTo(x - rx - 2, y - ry * 0.12); ctx.quadraticCurveTo(x, y - ry * 0.32, x + rx + 2, y - ry * 0.12); ctx.stroke();
     } else if (mode === 'angry') {
       ctx.beginPath(); ctx.moveTo(x - side * (rx + 4), y - ry * 0.05); ctx.lineTo(x + side * (rx + 4), y - ry * 0.85); ctx.stroke();

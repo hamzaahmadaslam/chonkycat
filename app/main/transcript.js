@@ -56,7 +56,7 @@ function inspect(file) {
       if (t) lastText = t;
     }
   }
-  if (tokens === null) return { tokens: 0, window: windowFor(model), model, lastText };
+  if (tokens === null) return null; // unknown: the caller keeps its last value
   let window = windowFor(model);
   if (tokens > window * 0.98) window = 1000000; // larger-context models report past 200k
   return { tokens, window, model, lastText };

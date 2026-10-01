@@ -34,7 +34,7 @@ function answer(q, { settings, status, stats }) {
     return `I’m ${name}! A professional loaf who watches Claude Code for you. I get chubbier as the context fills up, and I burp when it compacts.`;
   }
   if (has(/\b(help|what can you|commands?)\b/)) {
-    return 'Try: “what’s Claude doing?”, “summary”, “how full are you?”, “stats”, “feed”, or “joke”. Click me to boop, drag me around, double-click to make me jump.';
+    return 'Try: “what’s Claude doing?”, “summary”, “diary”, “how full are you?”, “stats”, “feed”, or “joke”. Click me to boop, drag me around, double-click to make me jump.';
   }
   if (has(/\b(joke|funny|laugh)\b/)) return pick(JOKES);
   if (has(/\b(feed|food|hungry|eat|fish)\b/) && !has(/\bstats?\b/)) {
@@ -51,7 +51,20 @@ function answer(q, { settings, status, stats }) {
     if (!s) return 'Claude hasn’t finished a reply yet. I’ll tell you when it does!';
     return `${s.project} last said: “${s.summary}”`;
   }
-  if (has(/\b(stats?|score|streak|today|how many)\b/)) {
+  if (has(/\b(diary|journal|today|recap)\b/)) {
+    const t = stats.today || {};
+    const bits = [];
+    if (t.tasks) bits.push(`finished ${t.tasks} task${t.tasks === 1 ? '' : 's'}`);
+    if (t.commits) bits.push(`made ${t.commits} commit${t.commits === 1 ? '' : 's'}`);
+    if (t.pushes) bits.push(`pushed ${t.pushes} time${t.pushes === 1 ? '' : 's'}`);
+    if (t.testsPassed) bits.push(`saw ${t.testsPassed} green test run${t.testsPassed === 1 ? '' : 's'}`);
+    if (t.kittens) bits.push(`sent out ${t.kittens} kitten${t.kittens === 1 ? '' : 's'}`);
+    const mins = t.minutesWorking || 0;
+    const work = mins ? `We worked for ${mins >= 60 ? Math.floor(mins / 60) + 'h ' : ''}${mins % 60}m. ` : '';
+    if (!bits.length) return `Dear diary: quiet day so far. ${work}I napped professionally. 🐾`;
+    return `Dear diary: today we ${bits.join(', ')}. ${work}I earned ${t.fish || 0} fish${stats.streakDays > 1 ? ` and the streak is ${stats.streakDays} days` : ''}. 🐾`;
+  }
+  if (has(/\b(stats?|score|streak|how many)\b/)) {
     return `Today: ${stats.today.tasks} tasks done, ${stats.today.minutesWorking} min of work. Lifetime: ${stats.tasksDone} tasks, ${stats.commits} commits, ${stats.pushes} pushes, ${stats.testsPassed} green test runs, ${stats.kittens} kittens sent out. Streak: ${stats.streakDays} day${stats.streakDays === 1 ? '' : 's'} (best ${stats.bestStreak}). Fish: ${stats.fish}.`;
   }
   if (has(/\b(wait|need|stuck|blocked|permission|approve)\b/)) {

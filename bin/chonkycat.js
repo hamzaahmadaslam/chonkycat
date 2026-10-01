@@ -45,8 +45,9 @@ function post(rt, route, body) {
   });
 }
 
+let electronError = '';
 function electronPath() {
-  try { return require('electron'); } catch { return null; }
+  try { return require('electron'); } catch (e) { electronError = e.message; return null; }
 }
 
 async function start() {
@@ -57,7 +58,8 @@ async function start() {
   }
   const bin = electronPath();
   if (!bin || typeof bin !== 'string') {
-    console.error(c.r('Electron is not installed. Run `npm install` in the chonkycat folder, or use `npx chonkycat`.'));
+    console.error(c.r('Electron could not be loaded' + (electronError ? `: ${electronError}` : '.')));
+    console.error(c.d('   Try reinstalling: npm install -g chonkycat  (or delete the npx cache and run npx chonkycat again)'));
     process.exit(1);
   }
   ensureHome();
@@ -66,6 +68,7 @@ async function start() {
   delete env.ELECTRON_RUN_AS_NODE;
   const out = fs.openSync(FILES.log, 'a');
   const child = spawn(bin, [ROOT], { detached: true, stdio: ['ignore', out, out], windowsHide: false, env });
+  child.on('error', (e) => console.error(c.r('Could not start Electron: ' + e.message)));
   child.unref();
   console.log(`${cat}  Waking up ${c.b(loadSettings().name)}… she’ll appear at the bottom of your screen.`);
   if (!hooksInstalled()) {
@@ -79,7 +82,10 @@ async function start() {
 async function stop() {
   const rt = readJSON(FILES.runtime, null);
   if (!rt || !(await health(rt))) { console.log(`${loadSettings().name} is not running.`); return; }
-  try { process.kill(rt.pid); console.log(`${cat}  Goodnight, ${loadSettings().name}. 💤`); } catch (e) { console.error(c.r('Could not stop: ' + e.message)); }
+  await post(rt, '/control', { action: 'quit' });
+  for (let i = 0; i < 30 && (await health(rt)); i++) await new Promise((r) => setTimeout(r, 100));
+  if (await health(rt)) { try { process.kill(rt.pid); } catch (e) { console.error(c.r('Could not stop: ' + e.message)); return; } }
+  console.log(`${cat}  Goodnight, ${loadSettings().name}. 💤`);
 }
 
 async function status() {
@@ -94,8 +100,47 @@ async function status() {
 // --------------------------------------------------------------- hooks --
 const EVENTS = ['SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'StopFailure', 'SubagentStart', 'SubagentStop', 'PreCompact', 'PostCompact'];
 
+const STABLE_HOOK = path.join(HOME, 'hooks', 'chonky-hook.js');
 function hookCommand(extra) {
-  return `node "${HOOK.replace(/\\/g, '/')}"${extra ? ' ' + extra : ''}`;
+  return `node "${STABLE_HOOK.replace(/\\/g, '/')}"${extra ? ' ' + extra : ''}`;
+}
+
+// npx installs live in a cache that gets cleaned; copy the hook somewhere permanent.
+function copyHookScripts() {
+  fs.mkdirSync(path.dirname(STABLE_HOOK), { recursive: true });
+  for (const f of ['chonky-hook.js', 'risk.js']) fs.copyFileSync(path.join(ROOT, 'plugin', 'scripts', f), path.join(path.dirname(STABLE_HOOK), f));
+}
+
+// Read ~/.claude/settings.json strictly: if it exists but isn't valid JSON, refuse to touch it.
+function readClaudeSettings() {
+  if (!fs.existsSync(CLAUDE_SETTINGS)) return {};
+  const text = fs.readFileSync(CLAUDE_SETTINGS, 'utf8').replace(/^\uFEFF/, '');
+  if (!text.trim()) return {};
+  try {
+    const v = JSON.parse(text);
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('not an object');
+    return v;
+  } catch (e) {
+    console.error(c.r(`${CLAUDE_SETTINGS} isn't plain JSON (${e.message}).`));
+    console.error(c.d('   I won\'t rewrite it and risk losing your settings. Fix the file, or use the plugin instead:'));
+    console.error('   /plugin marketplace add hamzaahmadaslam/chonkycat  then  /plugin install chonkycat@chonkycat');
+    process.exit(1);
+  }
+}
+
+function writeClaudeSettings(s) {
+  fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
+  if (fs.existsSync(CLAUDE_SETTINGS)) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    fs.copyFileSync(CLAUDE_SETTINGS, `${CLAUDE_SETTINGS}.chonkycat-backup-${stamp}`);
+  }
+  const tmp = CLAUDE_SETTINGS + '.chonkycat-tmp';
+  fs.writeFileSync(tmp, JSON.stringify(s, null, 2));
+  fs.renameSync(tmp, CLAUDE_SETTINGS);
+}
+
+function pluginInstalled() {
+  return JSON.stringify(readJSON(path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json'), {})).includes('chonkycat');
 }
 
 function hooksInstalled() {
@@ -112,26 +157,30 @@ function stripChonky(hooks) {
 }
 
 function installHooks() {
-  const s = readJSON(CLAUDE_SETTINGS, {});
-  if (fs.existsSync(CLAUDE_SETTINGS)) fs.copyFileSync(CLAUDE_SETTINGS, CLAUDE_SETTINGS + '.chonkycat-backup');
+  if (pluginInstalled()) {
+    console.log(c.d('The Chonky Cat plugin is already installed, so hooks are already connected. Adding them again would double every event.'));
+    console.log(c.d('Remove the plugin first (/plugin uninstall chonkycat@chonkycat) if you really want settings.json hooks.'));
+    return;
+  }
+  const s = readClaudeSettings();
+  copyHookScripts();
   const hooks = stripChonky(s.hooks || {});
   const add = (ev, entry) => { (hooks[ev] = hooks[ev] || []).push(entry); };
   for (const ev of EVENTS) add(ev, { hooks: [{ type: 'command', command: hookCommand(), async: true, timeout: ev === 'SessionStart' ? 20 : 5 }] });
   add('PreToolUse', { matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: hookCommand('guard'), timeout: 5 }] });
   add('PermissionRequest', { hooks: [{ type: 'command', command: hookCommand('permission'), timeout: 120 }] });
   s.hooks = hooks;
-  fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
-  fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(s, null, 2));
-  console.log(`${cat}  Hooks added to ${CLAUDE_SETTINGS} ${c.d('(backup: settings.json.chonkycat-backup)')}`);
+  writeClaudeSettings(s);
+  console.log(`${cat}  Hooks added to ${CLAUDE_SETTINGS} ${c.d('(a timestamped backup sits next to it)')}`);
   console.log(c.d('   Restart Claude Code sessions to pick them up. Use the plugin instead if you prefer: /plugin install chonkycat@chonkycat'));
 }
 
 function uninstallHooks() {
-  const s = readJSON(CLAUDE_SETTINGS, null);
-  if (!s) { console.log('No ~/.claude/settings.json found.'); return; }
+  if (!fs.existsSync(CLAUDE_SETTINGS)) { console.log('No ~/.claude/settings.json found.'); return; }
+  const s = readClaudeSettings();
   s.hooks = stripChonky(s.hooks || {});
   if (!Object.keys(s.hooks).length) delete s.hooks;
-  fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(s, null, 2));
+  writeClaudeSettings(s);
   console.log(`${cat}  Chonky Cat hooks removed from ${CLAUDE_SETTINGS}.`);
 }
 

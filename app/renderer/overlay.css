@@ -77,6 +77,8 @@ html, body {
   transform: translateX(-50%) rotate(45deg);
 }
 .bubble b { color: var(--accent); }
+.bubble.interactive { pointer-events: auto; }
+.bubble .bubble-action { margin-top: 7px; font-size: 12.5px; padding: 4px 10px; }
 
 @keyframes pop { from { scale: 0.6; opacity: 0; } to { scale: 1; opacity: 1; } }
 

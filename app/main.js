@@ -331,7 +331,7 @@ function toLocal(w) {
 
 function sanitize(p) {
   const out = {};
-  const allowed = ['name', 'skin', 'size', 'fps', 'sounds', 'volume', 'speakSummaries', 'voice', 'showStatusLine', 'pawApproval', 'pawApprovalTimeout', 'dangerGuard', 'randomAnimations', 'animationFrequency', 'desktopAwareness', 'runToWindow', 'perchOnWindows', 'cursorPlay', 'breakGuardian', 'breakMinutes', 'autoStart', 'launchAtLogin', 'hotkey', 'dnd', 'seasonal', 'cafe'];
+  const allowed = ['roam', 'name', 'skin', 'size', 'fps', 'sounds', 'volume', 'speakSummaries', 'voice', 'showStatusLine', 'pawApproval', 'pawApprovalTimeout', 'dangerGuard', 'randomAnimations', 'animationFrequency', 'desktopAwareness', 'runToWindow', 'perchOnWindows', 'cursorPlay', 'breakGuardian', 'breakMinutes', 'autoStart', 'launchAtLogin', 'hotkey', 'dnd', 'seasonal', 'cafe'];
   for (const k of allowed) if (p && k in p) out[k] = p[k];
   if ('name' in out) out.name = String(out.name || 'Arshia').trim().slice(0, 24) || 'Arshia';
   if ('size' in out) out.size = Math.max(90, Math.min(420, Number(out.size) || 190));

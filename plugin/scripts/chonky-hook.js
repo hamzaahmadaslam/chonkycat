@@ -74,12 +74,16 @@ function launchApp() {
   const launch = readJSON(path.join(HOME, 'launch.json'));
   try {
     let child;
+    const env = Object.assign({}, process.env);
+    delete env.ELECTRON_RUN_AS_NODE; // must be absent, not empty
+    try { fs.mkdirSync(HOME, { recursive: true }); } catch {}
+    const out = fs.openSync(path.join(HOME, 'chonkycat.log'), 'a');
     if (launch && launch.command && fs.existsSync(launch.command)) {
-      child = spawn(launch.command, launch.args || [], { detached: true, stdio: 'ignore', windowsHide: false });
+      child = spawn(launch.command, launch.args || [], { detached: true, stdio: ['ignore', out, out], windowsHide: false, env });
     } else {
       // never installed locally yet — fetch & start the published app
       const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-      child = spawn(npx, ['-y', 'chonkycat', 'start'], { detached: true, stdio: 'ignore', shell: process.platform === 'win32', windowsHide: true });
+      child = spawn(npx, ['-y', 'chonkycat', 'start'], { detached: true, stdio: ['ignore', out, out], shell: process.platform === 'win32', windowsHide: true, env });
     }
     child.unref();
     return true;

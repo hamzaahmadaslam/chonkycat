@@ -5,7 +5,7 @@
   const $ = (id) => document.getElementById(id);
   let s = null;
 
-  const BOOL = ['randomAnimations', 'cursorPlay', 'seasonal', 'showStatusLine', 'sounds', 'speakSummaries', 'pawApproval', 'dangerGuard', 'autoStart', 'dnd', 'desktopAwareness', 'perchOnWindows', 'runToWindow', 'breakGuardian', 'launchAtLogin'];
+  const BOOL = ['roam', 'randomAnimations', 'cursorPlay', 'seasonal', 'showStatusLine', 'sounds', 'speakSummaries', 'pawApproval', 'dangerGuard', 'autoStart', 'dnd', 'desktopAwareness', 'perchOnWindows', 'runToWindow', 'breakGuardian', 'launchAtLogin'];
   const NUM = ['size', 'fps', 'volume', 'animationFrequency', 'pawApprovalTimeout', 'breakMinutes'];
   const TEXT = ['name', 'hotkey', 'voice'];
 

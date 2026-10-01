@@ -61,7 +61,11 @@ async function start() {
     process.exit(1);
   }
   ensureHome();
-  const child = spawn(bin, [ROOT], { detached: true, stdio: 'ignore', windowsHide: false, env: Object.assign({}, process.env, { ELECTRON_RUN_AS_NODE: '' }) });
+  // ELECTRON_RUN_AS_NODE must be absent, not empty: Electron only checks that it exists
+  const env = Object.assign({}, process.env);
+  delete env.ELECTRON_RUN_AS_NODE;
+  const out = fs.openSync(FILES.log, 'a');
+  const child = spawn(bin, [ROOT], { detached: true, stdio: ['ignore', out, out], windowsHide: false, env });
   child.unref();
   console.log(`${cat}  Waking up ${c.b(loadSettings().name)}… she’ll appear at the bottom of your screen.`);
   if (!hooksInstalled()) {

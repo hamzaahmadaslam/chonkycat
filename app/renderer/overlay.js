@@ -71,7 +71,7 @@
     say(text, ms, opts) { say(text, ms, opts); },
     toast(text, ms) { toast(text, ms); },
     burst(kind, x, y, n, o) { burst(kind, x, y, n, o); },
-    sprite(s) { sprites.push(s); return s; },
+    sprite(s) { s.born = now(); sprites.push(s); return s; },
     squash(x, y) { cat.sq0 = { x, y }; cat.sqT = 0; },
     walkTo(x, speed) {
       const dx = x - cat.x;
@@ -191,7 +191,7 @@
     },
   };
   B.zoomies = {
-    idle: true, weight: 1, pri: 1, dur: 12,
+    idle: true, weight: 1, pri: 1, dur: 12, moves: true,
     cond: () => !cat.perch,
     start(e, p) {
       const w = e.view.w;
@@ -205,30 +205,28 @@
       if (Math.random() < 0.35) e.burst('dust', e.cat.x + e.cat.flip * 40, e.cat.y - 4, 1);
       return { pose: 'walk', walkPhase: e.cat.walkPhase, mouth: 'pant', eyes: 'wide', ears: 'back' };
     },
-    end(e) { savePos(); },
   };
   B.wander = {
-    idle: true, weight: 4, pri: 1, dur: 20,
+    idle: true, weight: 4, pri: 1, dur: 20, moves: true,
     start(e, p) {
       const lo = cat.perch ? cat.perch.x + 40 : 70;
       const hi = cat.perch ? cat.perch.x + cat.perch.w - 40 : e.view.w - 70;
-      p.to = clamp(e.cat.x + rand(-420, 420), lo, hi);
+      const home = cat.perch || cat.homeX == null ? e.cat.x : cat.homeX;
+      p.to = clamp(home + rand(-240, 240), lo, hi); // a stroll near home, not a migration
     },
     frame(e, k, s, p) {
       if (e.walkTo(p.to, 130)) return { done: true };
       return { pose: 'walk', walkPhase: e.cat.walkPhase };
     },
-    end() { savePos(); },
   };
   B.roll = {
-    idle: true, weight: 1, pri: 1, dur: 1.8,
+    idle: true, weight: 1, pri: 1, dur: 1.8, moves: true,
     cond: () => !cat.perch,
     start(e, p) { p.dir = e.cat.x > e.view.w / 2 ? -1 : 1; e.sfx('pop'); },
     frame(e, k, s, p) {
       if (k < 0.75) { e.cat.x = clamp(e.cat.x + p.dir * 260 * e.dt, 80, e.view.w - 80); return { rot: p.dir * ease(k / 0.75) * TAU, eyes: 'happy', mouth: 'smile', dy: -18 }; }
       return { eyes: 'dizzy', mouth: 'wavy' };
     },
-    end: () => savePos(),
   };
   B.butterfly = {
     idle: true, weight: 2, pri: 1, dur: 9,
@@ -276,6 +274,7 @@
       }
       return { look: { x: p.side, y: 0.3 }, eyes: 'happy', mouth: 'smile' };
     },
+    end(e, p) { if (!p.hit) { p.hit = 1; p.y.vx = p.side * 520; } },
   };
   B.box = {
     idle: true, weight: 2, pri: 1, dur: 12,
@@ -304,7 +303,7 @@
     },
   };
   B.peekaboo = {
-    idle: true, weight: 1, pri: 1, dur: 14,
+    idle: true, weight: 1, pri: 1, dur: 14, moves: true,
     cond: () => !cat.perch,
     start(e, p) {
       p.home = e.cat.x;
@@ -322,7 +321,6 @@
       if (e.walkTo(p.home, 200)) return { done: true };
       return { pose: 'walk', walkPhase: e.cat.walkPhase };
     },
-    end: () => savePos(),
   };
   B.birdWatch = {
     idle: true, weight: 1, pri: 1, dur: 7,
@@ -380,7 +378,7 @@
     frame: () => ({ wave: 1, eyes: 'happy', mouth: 'smile' }),
   };
   B.perch = {
-    idle: true, weight: 2, pri: 1, dur: 6,
+    idle: true, weight: 2, pri: 1, dur: 6, moves: true,
     cond: (e) => e.settings.desktopAwareness && e.settings.perchOnWindows && !cat.perch && cat.mode === 'floor',
     start(e, p) {
       p.wait = true;
@@ -405,7 +403,15 @@
     cond: () => !!cat.perch && cat.mode === 'perch',
     start(e) { cat.perch = null; e.hopTo(e.cat.x + rand(-80, 80), e.floorY(), 0.7, 60, 'floor'); },
     frame: () => ({ eyes: 'wide', mouth: 'o' }),
-    end: () => savePos(),
+  };
+  B.goHome = {
+    pri: 1, dur: 40,
+    start(e) { if (cat.perch) { cat.perch = null; e.hopTo(e.cat.x, e.floorY(), 0.7, 60, 'floor'); } },
+    frame(e) {
+      if (!e.landed()) return { eyes: 'wide', mouth: 'o' };
+      if (cat.homeX == null || e.walkTo(cat.homeX, 170)) return { done: true };
+      return { pose: 'walk', walkPhase: e.cat.walkPhase };
+    },
   };
   B.chaseCursor = {
     pri: 2, dur: 3,
@@ -418,7 +424,6 @@
       if (e.landed() && s > 2) return { eyes: 'happy', mouth: 'smile' };
       return { eyes: 'wide', mouth: 'o' };
     },
-    end: () => savePos(),
   };
 
   // ---- reactions to Claude Code
@@ -470,8 +475,7 @@
       e.toast('Pushed! 🚀', 2400);
     },
     frame(e, k, s, p) {
-      p.r.vy -= 900 * e.dt;
-      if (s > 0.35) p.r.y += p.r.vy * e.dt;
+      // flight runs in updateFx so an interrupted reaction cannot strand the rocket
       if (Math.random() < 0.5) e.burst('dust', p.r.x + rand(-10, 10), p.r.y + 60, 1);
       const [vx, vy] = e.virt(p.r.x, p.r.y);
       return { look: { x: clamp((vx - A.CX) / 160, -1, 1), y: clamp((vy - 200) / 150, -1, 1) }, wave: s > 1 ? 1 : 0, eyes: 'wide', mouth: 'o', ears: 'perk' };
@@ -500,6 +504,7 @@
       }
       return { look: { x: 0, y: 0 }, eyes: s % 1 < 0.15 ? 'blink' : 'open', mouth: 'w', headTilt: 0.1 };
     },
+    end(e, p) { if (!p.c.falling) { p.c.falling = true; p.c.vx = p.side * 160; p.c.vy = -120; } },
   };
   B.oops = {
     pri: 3, dur: 2,
@@ -564,6 +569,7 @@
   };
   B.reward = {
     pri: 4, dur: 4.2,
+    end(e, p) { p.f.dead = true; },
     start(e, p) {
       e.sfx('chime');
       p.f = e.sprite({ kind: 'fishFly', x: e.cat.x + rand(-160, 160), y: -40, t0: now(), tx: e.cat.x, ty: e.headTopY() + e.cat.h * 0.25 });
@@ -730,7 +736,12 @@
     update(t) {
       if (cat.mode === 'drag') return { eyes: 'wide', mouth: 'o', sy: 1.12, sx: 0.94, ears: 'back', paws: undefined };
       if (!this.cur && this.queue.length) { const [n, p] = this.queue.shift(); this.play(n, p); }
-      if (!this.cur) { this.maybeIdle(t); return {}; }
+      if (!this.cur) {
+        const h = wantsHome(t);
+        if (h === 'go') this.play('goHome');
+        else if (!h) this.maybeIdle(t); // while she is away, antics wait until she is home
+        return {};
+      }
       const c = this.cur;
       const s = t - c.t0;
       const dur = typeof c.def.dur === 'function' ? c.def.dur(env, c.p) : c.def.dur;
@@ -746,7 +757,8 @@
       this.nextIdle = t + rand(9, 28) / freq;
       if (!settings.randomAnimations || cat.mode === 'drag' || cat.mode === 'air' || cat.mode === 'hop') return;
       const busy = !['idle', 'sleep', 'done'].includes(status.state);
-      const pool = Object.entries(B).filter(([n, d]) => d.idle && (!busy || d.busyOk) && (!d.cond || d.cond(env)) && !this.lastIdle.includes(n));
+      const roam = settings.roam !== false;
+      const pool = Object.entries(B).filter(([n, d]) => d.idle && (!busy || d.busyOk) && (roam || !d.moves) && (!d.cond || d.cond(env)) && !this.lastIdle.includes(n));
       if (!pool.length) return;
       const sum = pool.reduce((a, [, d]) => a + (d.weight || 1), 0);
       let r = Math.random() * sum;
@@ -872,8 +884,12 @@
       const s = sprites[i];
       if (s.kind === 'butterfly' && s.free) { s.x += s.vx * dt; s.y += s.vy * dt; if (s.y < -60 || s.x < -60 || s.x > view.w + 60) s.dead = true; }
       if (s.kind === 'bird') { s.x += s.vx * dt; s.y += Math.sin(now() * 3) * 0.5; if (s.x < -100 || s.x > view.w + 100) s.dead = true; }
-      if (s.kind === 'yarn' && s.vx) { s.x += s.vx * dt; s.rot += s.vx * dt / 22; s.vx *= 0.995; if (s.x < -60 || s.x > view.w + 60) s.dead = true; }
-      if (s.kind === 'rocket' && s.y < -200) s.dead = true;
+      if (s.kind === 'yarn' && s.vx) { s.x += s.vx * dt; s.rot += s.vx * dt / 22; s.vx *= Math.pow(0.74, dt); if (s.x < -60 || s.x > view.w + 60) s.dead = true; else if (Math.abs(s.vx) < 30 && !s.fading) s.fading = now(); }
+      if (s.kind === 'rocket') {
+        s.vy -= 900 * dt;
+        if (now() - s.t0 > 0.35) s.y += s.vy * dt;
+        if (s.y < -200 || now() - s.t0 > 8) s.dead = true;
+      }
       if (s.kind === 'cup' && s.falling && !s.broken) {
         s.vy += 1800 * dt;
         s.x += s.vx * dt;
@@ -884,6 +900,8 @@
       }
       if (s.kind === 'cup' && s.broken && now() - s.t1 > 5) s.dead = true;
       if (s.kind === 'fishFly') { const u = clamp((now() - s.t0) / 0.8, 0, 1); s.x = lerp(s.x, s.tx, u * 0.25); s.y = lerp(-40, s.ty, ease(u)); s.rot = u * TAU * 1.5; }
+      if (!s.fading && now() - s.born > 20) s.fading = now();
+      if (s.fading) { s.alpha = 1 - (now() - s.fading) / 0.6; if (s.alpha <= 0) s.dead = true; }
       if (s.dead) sprites.splice(i, 1);
     }
   }
@@ -925,7 +943,7 @@
         env.sfx('thud');
         burst('dust', cat.x, cat.y - 4, 6);
         if (hard) director.play('dizzy', {}, true);
-        savePos();
+        if (cat.userThrown) { cat.userThrown = false; savePos(); } // only you choose her spot
       }
     } else if (cat.mode === 'floor') {
       cat.y = env.floorY();
@@ -1061,6 +1079,7 @@
       nameTag(k.x, k.y - cat.w * 0.62 * 0.86, k.type);
     }
     for (const s of sprites) {
+      fctx.globalAlpha = s.alpha == null ? 1 : clamp(s.alpha, 0, 1);
       if (s.kind === 'butterfly') A.drawButterfly(fctx, s.x, s.y, 1, t * 14, s.color);
       else if (s.kind === 'bird') A.drawBird(fctx, s.x, s.y, 1, t * 16, s.dir);
       else if (s.kind === 'yarn') A.drawYarn(fctx, s.x, s.y, s.r, s.rot, '#E45B8F');
@@ -1068,6 +1087,7 @@
       else if (s.kind === 'cup') A.drawCup(fctx, s.x, s.y, s.rot, 0.9, s.broken);
       else if (s.kind === 'fishFly') { fctx.save(); fctx.translate(s.x, s.y); fctx.rotate(s.rot); A.drawFish(fctx, 0, 0, 0.9, 0); fctx.restore(); }
     }
+    fctx.globalAlpha = 1;
     for (const p of particles) {
       const a = 1 - p.life / p.max;
       fctx.save();
@@ -1342,6 +1362,7 @@
       cat.vx = clamp((b[0] - a[0]) / dt, -2600, 2600);
       cat.vy = clamp((b[1] - a[1]) / dt, -2600, 2600);
       cat.mode = 'air';
+      cat.userThrown = true;
       cat.spin = Math.abs(cat.vx) > 900 ? Math.sign(cat.vx) * 10 : 0;
       cat.spinAngle = 0;
       if (cat.x < 0 || cat.x > view.w) api.moveDisplay({ x: cat.x, y: cat.y }).then((b2) => { if (b2) { cat.x = cat.x < 0 ? b2.width - cat.w : cat.w; cat.y = 0; resize(b2); } });
@@ -1374,7 +1395,7 @@
 
   // cursor play: if the pointer rests near the cat, she stalks and pounces on it
   function updateCursorPlay(t) {
-    if (!settings.cursorPlay || !cursor.inside || drag || hover.on) return;
+    if (!settings.cursorPlay || settings.roam === false || !cursor.inside || drag || hover.on) return;
     if (director.cur || status.state === 'needs' || status.state === 'danger' || status.state === 'sleep') return;
     const near = Math.abs(cursor.x - cat.x) < 340 && Math.abs(cursor.x - cat.x) > cat.w * 0.6 && Math.abs(cursor.y - cat.y) < 140;
     if (near && t - cursor.lastMove > 1.6 && t - cursor.lastMove < 1.7 && Math.random() < 0.5) director.play('chaseCursor');
@@ -1449,7 +1470,19 @@
 
   // ============================================================ wiring --
   let posTimer = null;
+  // She roams, but always returns to her spot. The spot only changes when you drag her.
+  function wantsHome(t) {
+    if (cat.homeX == null || cat.mode === 'drag' || cat.mode === 'air' || cat.mode === 'hop') return false;
+    if (status.state === 'needs' || status.state === 'danger') return false;
+    const away = Math.abs(cat.x - cat.homeX) > 24 || !!cat.perch;
+    if (!away) { cat.awaySince = 0; return false; }
+    if (!cat.awaySince) cat.awaySince = t;
+    return t - cat.awaySince > (cat.perch ? 8 : 2) ? 'go' : 'wait';
+  }
+
   function savePos() {
+    cat.homeX = cat.x;
+    cat.awaySince = 0;
     clearTimeout(posTimer);
     posTimer = setTimeout(() => api.savePosition({ x: Math.round(cat.x) }), 1500);
   }
@@ -1620,6 +1653,7 @@
     const p = settings.position;
     cat.x = p && p.x != null ? clamp(p.x, cat.w * 0.5, view.w - cat.w * 0.5) : view.w - cat.w * 0.9;
     cat.y = env.floorY();
+    cat.homeX = cat.x;
     api.onStatus(onStatus);
     api.onFx(onFx);
     api.onStats((s) => { stats = s; });
@@ -1641,7 +1675,7 @@
     const listeners = {};
     const on = (ch) => (cb) => { (listeners[ch] = listeners[ch] || []).push(cb); };
     const emit = (ch, d) => (listeners[ch] || []).forEach((f) => f(d));
-    const mockSettings = { name: 'Arshia', skin: 'tabby', size: 190, fps: 30, sounds: false, volume: 0.4, showStatusLine: true, pawApproval: true, pawApprovalTimeout: 25, randomAnimations: true, animationFrequency: 1, desktopAwareness: false, runToWindow: false, perchOnWindows: false, cursorPlay: true, seasonal: true, dnd: false };
+    const mockSettings = { roam: true, name: 'Arshia', skin: 'tabby', size: 190, fps: 30, sounds: false, volume: 0.4, showStatusLine: true, pawApproval: true, pawApprovalTimeout: 25, randomAnimations: true, animationFrequency: 1, desktopAwareness: false, runToWindow: false, perchOnWindows: false, cursorPlay: true, seasonal: true, dnd: false };
     const mockStats = { fish: 3, streakDays: 4, today: { tasks: 2, minutesWorking: 30 }, tasksDone: 12, commits: 4 };
     window.addEventListener('mousemove', (e) => emit('cursor', { x: e.clientX, y: e.clientY, inside: true }));
     window.demo = {
@@ -1652,6 +1686,7 @@
       perm() { emit('permission', { id: 'p1', tool: 'Bash', input: { command: 'rm -rf build && npm run build' }, project: 'demo', timeout: 25 }); },
       play(name) { director.play(name, {}, true); },
       behaviors: () => Object.keys(B),
+      inspect: () => ({ x: Math.round(cat.x), homeX: Math.round(cat.homeX), mode: cat.mode, perch: !!cat.perch, behaviour: director.cur ? director.cur.name : null, sprites: sprites.map((x) => x.kind + (x.fading ? '(fading)' : '')) }),
     };
     return {
       init: async () => ({ bounds: { width: innerWidth, height: innerHeight }, settings: mockSettings, stats: mockStats, status: { state: 'idle', sessions: [], context: { tokens: 0, window: 200000 }, detail: 'Idle' } }),

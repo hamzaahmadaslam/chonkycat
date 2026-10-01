@@ -27,6 +27,7 @@ const DEFAULTS = {
   pawApprovalTimeout: 25,
   dangerGuard: true,
   randomAnimations: true,
+  roam: true,
   animationFrequency: 1, // 0.5 calm … 2 hyper
   desktopAwareness: true,
   runToWindow: true,

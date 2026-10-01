@@ -66,7 +66,7 @@ async function start() {
   console.log(`${cat}  Waking up ${c.b(loadSettings().name)}… she’ll appear at the bottom of your screen.`);
   if (!hooksInstalled()) {
     console.log(c.d('\nTip: connect her to Claude Code with the plugin:'));
-    console.log(`   /plugin marketplace add ${c.b('<github-user>/chonkycat')}`);
+    console.log(`   /plugin marketplace add ${c.b('hamzaahmadaslam/chonkycat')}`);
     console.log(`   /plugin install ${c.b('chonkycat@chonkycat')}`);
     console.log(c.d(`or wire hooks directly:  npx chonkycat install-hooks`));
   }

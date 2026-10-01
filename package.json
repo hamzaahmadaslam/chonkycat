@@ -12,11 +12,35 @@
     "assets": "electron scripts/render-assets.js",
     "test": "node --test"
   },
-  "keywords": ["claude-code", "desktop-pet", "cat", "electron", "hooks", "status"],
+  "keywords": [
+    "claude-code",
+    "desktop-pet",
+    "cat",
+    "electron",
+    "hooks",
+    "status"
+  ],
   "license": "MIT",
-  "engines": { "node": ">=18" },
-  "files": ["app/", "bin/", "plugin/", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "app/",
+    "bin/",
+    "plugin/",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "electron": "^44.5.1"
+  },
+  "author": "Hamza Ahmad Aslam",
+  "homepage": "https://github.com/hamzaahmadaslam/chonkycat",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hamzaahmadaslam/chonkycat.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hamzaahmadaslam/chonkycat/issues"
   }
 }

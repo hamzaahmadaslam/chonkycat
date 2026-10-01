@@ -26,7 +26,7 @@ You need **Node 18+** and **Claude Code**. Two steps:
 **1. Connect her to Claude Code** (inside Claude Code):
 
 ```
-/plugin marketplace add <github-user>/chonkycat
+/plugin marketplace add hamzaahmadaslam/chonkycat
 /plugin install chonkycat@chonkycat
 ```
 
@@ -150,7 +150,7 @@ Supported. Desktop awareness uses AppleScript on macOS (grant Accessibility perm
 ## Development
 
 ```bash
-git clone https://github.com/<github-user>/chonkycat && cd chonkycat
+git clone https://github.com/hamzaahmadaslam/chonkycat && cd chonkycat
 npm install
 npm start                 # run the app from source
 npm test                  # unit tests (risk rules, state machine, transcript, hook script)

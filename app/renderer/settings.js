@@ -1,7 +1,7 @@
 (function () {
   'use strict';
-  const A = window.ArshiaArt;
-  const api = window.arshia;
+  const A = window.CatArt;
+  const api = window.chonky;
   const $ = (id) => document.getElementById(id);
   let s = null;
 
@@ -25,7 +25,7 @@
   async function save(patch) {
     s = await api.saveSettings(patch);
     $('title').textContent = s.name;
-    document.title = `${s.name} settings`;
+    document.title = `${s.name} · Chonky Cat settings`;
     saved();
   }
 
@@ -47,6 +47,7 @@
     for (const k of TEXT) $(k).addEventListener('change', (e) => save({ [k]: e.target.value }));
     const cafe = () => save({ cafe: { enabled: $('cafeEnabled').checked, room: $('cafeRoom').value.trim(), displayName: $('cafeName').value.trim(), shareProject: $('cafeProject').checked } });
     ['cafeEnabled', 'cafeRoom', 'cafeName', 'cafeProject'].forEach((id) => $(id).addEventListener('change', cafe));
+    $('resetName').addEventListener('click', () => { $('name').value = 'Arshia'; save({ name: 'Arshia' }); });
   }
 
   function skins() {

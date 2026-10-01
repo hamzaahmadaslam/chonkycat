@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="docs/hero.png" width="300" alt="Arshia, a chubby orange tabby cat with a teal collar and a golden bell">
+  <img src="docs/hero.png" width="300" alt="Chonky Cat: Arshia, a chubby orange tabby cat with a teal collar and a golden bell">
 </p>
 
-<h1 align="center">Arshia</h1>
+<h1 align="center">Chonky Cat</h1>
 
 <p align="center"><b>A chubby, always-on-top desktop cat that shows you what Claude Code is doing — live.</b><br>
-She types when Claude edits, reads when it reads, gets fatter as the context window fills up, burps when you <code>/compact</code>, sends kittens out for subagents, and comes over to tap on your screen when Claude needs you.</p>
+Meet <b>Arshia</b> (rename her whatever you like). She types when Claude edits, reads when it reads, gets fatter as the context window fills up, burps when you <code>/compact</code>, sends kittens out for subagents, and comes over to tap on your screen when Claude needs you.</p>
 
 <p align="center">
   <a href="#install">Install</a> ·
-  <a href="#what-makes-arshia-different">Features</a> ·
+  <a href="#what-makes-chonky-cat-different">Features</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#settings">Settings</a> ·
   <a href="#faq">FAQ</a>
@@ -26,25 +26,25 @@ You need **Node 18+** and **Claude Code**. Two steps:
 **1. Connect her to Claude Code** (inside Claude Code):
 
 ```
-/plugin marketplace add <github-user>/arshia
-/plugin install arshia@arshia
+/plugin marketplace add <github-user>/chonkycat
+/plugin install chonkycat@chonkycat
 ```
 
 **2. Wake her up** (in any terminal):
 
 ```bash
-npx arshia-cat
+npx chonkycat
 ```
 
 That’s it. From now on she starts by herself whenever a Claude Code session begins. Works in the Claude Code CLI, the desktop app and IDE extensions — anything that runs Claude Code hooks — on Windows, macOS and Linux.
 
-> Prefer not to use the plugin system? `npx arshia-cat install-hooks` adds the same hooks to `~/.claude/settings.json` (with a backup), and `npx arshia-cat uninstall-hooks` removes them.
+> Prefer not to use the plugin system? `npx chonkycat install-hooks` adds the same hooks to `~/.claude/settings.json` (with a backup), and `npx chonkycat uninstall-hooks` removes them.
 
-Want to see everything she can do right now? Run `npx arshia-cat demo`.
+Want to see everything she can do right now? Run `npx chonkycat demo`.
 
-## What makes Arshia different
+## What makes Chonky Cat different
 
-There are a few Claude Code desktop pets around. Arshia does the usual (thinking, working, needs-you, done) and then a lot more:
+There are a few Claude Code desktop pets around. Arshia, your Chonky Cat, does the usual (thinking, working, needs-you, done) and then a lot more:
 
 | | Feature | What happens |
 |---|---|---|
@@ -77,16 +77,16 @@ There are a few Claude Code desktop pets around. Arshia does the usual (thinking
 
 <p align="center"><img src="docs/skins.png" alt="Four skins: orange tabby, grey British shorthair, tuxedo with a red bow collar, and calico"></p>
 
-Her name defaults to **Arshia** — rename her in Settings. Every pixel is drawn live by a procedural vector engine (no sprite sheets), which is why she can get gradually rounder, tilt her head, hold props and blend moods.
+Her name defaults to **Arshia** — rename her in Settings (there are suggestions like Mochi, Biscuit and Noodle, and a ↺ button to bring Arshia back). Every pixel is drawn live by a procedural vector engine (no sprite sheets), which is why she can get gradually rounder, tilt her head, hold props and blend moods.
 
 ## How it works
 
 ```
-Claude Code ──hooks──▶ arshia-hook.js ──HTTP (127.0.0.1 + token)──▶ Arshia app ──▶ transparent always-on-top window
+Claude Code ──hooks──▶ chonky-hook.js ──HTTP (127.0.0.1 + token)──▶ Chonky Cat app ──▶ transparent always-on-top window
 ```
 
 1. The plugin registers async hooks for `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SubagentStart/Stop`, `PreCompact/PostCompact`, `SessionEnd` and (sync) `PermissionRequest`.
-2. `arshia-hook.js` trims each payload (file contents are never sent) and POSTs it to the app on `127.0.0.1`, authenticated with a random per-install token. If the app isn’t running, the hook exits silently in milliseconds — **it can never slow down or break Claude Code**. On `SessionStart` it launches the app.
+2. `chonky-hook.js` trims each payload (file contents are never sent) and POSTs it to the app on `127.0.0.1`, authenticated with a random per-install token. If the app isn’t running, the hook exits silently in milliseconds — **it can never slow down or break Claude Code**. On `SessionStart` it launches the app.
 3. The app keeps a small state machine per session, mirrors the most urgent one (danger › needs-you › error › working › thinking › done › idle), and reads the **tail** of the transcript to measure context-window usage.
 4. The overlay renders Arshia with Canvas 2D. The window hugs her (it only grows to full screen while kittens, visitors or confetti need the room) and drops to 8–12 fps when she’s just napping, to stay light.
 
@@ -94,13 +94,13 @@ Claude Code ──hooks──▶ arshia-hook.js ──HTTP (127.0.0.1 + token)�
 
 - Everything stays on your machine. No accounts, no telemetry, no update pings.
 - The hook drops file contents and tool output before sending anything to the app.
-- The event server only listens on `127.0.0.1` and requires a token stored in `~/.arshia/runtime.json`.
+- The event server only listens on `127.0.0.1` and requires a token stored in `~/.chonkycat/runtime.json`.
 - The cat café is off by default; when on, it broadcasts only on your local network and only the cat’s name, skin and event type (project names only if you allow it).
 - Desktop awareness only reads window positions and titles, to find the terminal of the session that needs you; nothing is stored.
 
 ## Settings
 
-Right-click Arshia → **Settings…** (or the tray icon). Everything saves instantly and lives in `~/.arshia/settings.json`.
+Right-click Arshia → **Settings…** (or the tray icon). Everything saves instantly and lives in `~/.chonkycat/settings.json`.
 
 | Setting | Default | |
 |---|---|---|
@@ -120,15 +120,15 @@ Right-click Arshia → **Settings…** (or the tray icon). Everything saves inst
 ## CLI
 
 ```bash
-npx arshia-cat            # start (same as `start`)
-npx arshia-cat stop
-npx arshia-cat status     # is she awake? + stats
-npx arshia-cat demo       # plays every Claude Code reaction once
-npx arshia-cat doctor     # checks Node, Electron, hooks, connectivity
-npx arshia-cat install-hooks / uninstall-hooks
+npx chonkycat            # start (same as `start`)
+npx chonkycat stop
+npx chonkycat status     # is she awake? + stats
+npx chonkycat demo       # plays every Claude Code reaction once
+npx chonkycat doctor     # checks Node, Electron, hooks, connectivity
+npx chonkycat install-hooks / uninstall-hooks
 ```
 
-Inside Claude Code, `/arshia` wakes her up too.
+Inside Claude Code, `/chonky` wakes her up too.
 
 ## FAQ
 
@@ -145,12 +145,12 @@ About 1% of a modern CPU while napping, a bit more while animating. Choose *Batt
 Supported. Desktop awareness uses AppleScript on macOS (grant Accessibility permission if you want perching) and `xdotool`/`wmctrl` on Linux (optional). Click-through and always-on-top work everywhere Electron does.
 
 **Uninstall**
-`/plugin uninstall arshia@arshia`, `npx arshia-cat stop`, and delete `~/.arshia`.
+`/plugin uninstall chonkycat@chonkycat`, `npx chonkycat stop`, and delete `~/.chonkycat`.
 
 ## Development
 
 ```bash
-git clone https://github.com/<github-user>/arshia && cd arshia
+git clone https://github.com/<github-user>/chonkycat && cd chonkycat
 npm install
 npm start                 # run the app from source
 npm test                  # unit tests (risk rules, state machine, transcript, hook script)
@@ -163,9 +163,9 @@ Project layout:
 ```
 app/main.js               Electron main: window, tray, IPC
 app/main/                 event server, session state machine, transcript reader, desktop awareness, café, stats, Ask
-app/renderer/arshia-art.js  the procedural art engine (cat, props, hats, expressions)
+app/renderer/cat-art.js  the procedural art engine (cat, props, hats, expressions)
 app/renderer/overlay.js   behaviours (60+), physics, kittens, visitors, bubbles, menus
-plugin/                   the Claude Code plugin (hooks + /arshia command)
+plugin/                   the Claude Code plugin (hooks + /chonky command)
 .claude-plugin/marketplace.json   makes this repo a plugin marketplace
 ```
 
@@ -173,4 +173,4 @@ Ideas, new skins and new antics are very welcome — a new behaviour is usually 
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Arshia is a fan-made companion and is not affiliated with Anthropic.
+MIT — see [LICENSE](LICENSE). Chonky Cat is a fan-made companion and is not affiliated with Anthropic.

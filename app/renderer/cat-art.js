@@ -1,5 +1,5 @@
 /*
- * Arshia art engine
+ * Chonky Cat art engine
  * Draws a chubby, illustrated cat procedurally with Canvas 2D every frame.
  * Everything (fatness, mood, pose, props, skin) is a continuous parameter, so
  * the cat can morph smoothly instead of swapping between fixed sprites.
@@ -1893,5 +1893,5 @@
 
   const api = { draw, SKINS, W, H, CX, GROUND, drawFish, drawYarn, drawButterfly, drawBird, drawRocket, drawCup, drawParcel, drawPawPrint, heart, star4, toeBeans };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  root.ArshiaArt = api;
+  root.CatArt = api;
 })(typeof window !== 'undefined' ? window : globalThis);

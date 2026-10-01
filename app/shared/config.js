@@ -5,12 +5,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const HOME = process.env.ARSHIA_HOME || path.join(os.homedir(), '.arshia');
+const HOME = process.env.CHONKY_HOME || path.join(os.homedir(), '.chonkycat');
 const FILES = {
   settings: path.join(HOME, 'settings.json'),
   runtime: path.join(HOME, 'runtime.json'),
   stats: path.join(HOME, 'stats.json'),
-  log: path.join(HOME, 'arshia.log'),
+  log: path.join(HOME, 'chonkycat.log'),
 };
 
 const DEFAULTS = {

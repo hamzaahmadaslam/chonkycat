@@ -1,5 +1,5 @@
 'use strict';
-// Commands that make Arshia's fur stand up. Shared by the hook (guard mode) and the app.
+// Commands that make the cat's fur stand up. Shared by the hook (guard mode) and the app.
 const RISKY = [
   [/\brm\s+(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r|--recursive\s+--force|--force\s+--recursive)\b/i, 'recursive delete'],
   [/\bremove-item\b[^\n]*-recurse[^\n]*-force|\bremove-item\b[^\n]*-force[^\n]*-recurse/i, 'recursive delete'],

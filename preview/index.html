@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arshia Preview</title>
+<title>Chonky Cat Preview</title>
 <style>
   :root { --bg: #f6f1ea; --card: #fffaf3; --text: #3b2a1e; --muted: #8a7563; --accent: #e0843a; }
   @media (prefers-color-scheme: dark) {
@@ -24,7 +24,7 @@
 </style>
 </head>
 <body>
-<h1>Arshia</h1>
+<h1>Chonky Cat · Arshia</h1>
 <p>Illustrated engine preview. Every frame is drawn live.</p>
 <div class="controls">
   <label>Skin <select id="skin"></select></label>
@@ -34,9 +34,9 @@
 </div>
 <div class="hero"><canvas id="hero"></canvas></div>
 <div class="grid" id="grid"></div>
-<script src="../app/renderer/arshia-art.js"></script>
+<script src="../app/renderer/cat-art.js"></script>
 <script>
-  const E = window.ArshiaArt;
+  const E = window.CatArt;
   const GRID = location.search.includes('grid');
   if (GRID) { document.querySelector('.hero').style.display = 'none'; document.getElementById('grid').style.gridTemplateColumns = 'repeat(auto-fill, minmax(150px, 1fr))'; }
   const STATES = [

@@ -7,7 +7,7 @@ const on = (channel) => (cb) => {
   return () => ipcRenderer.removeListener(channel, fn);
 };
 
-contextBridge.exposeInMainWorld('arshia', {
+contextBridge.exposeInMainWorld('chonky', {
   init: () => ipcRenderer.invoke('init'),
   onStatus: on('status'),
   onFx: on('fx'),

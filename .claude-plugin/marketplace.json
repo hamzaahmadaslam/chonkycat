@@ -1,14 +1,14 @@
 {
-  "name": "arshia",
+  "name": "chonkycat",
   "owner": {
-    "name": "Arshia contributors"
+    "name": "Chonky Cat contributors"
   },
   "metadata": {
-    "description": "Arshia: the chubby desktop cat for Claude Code"
+    "description": "Chonky Cat: a chubby desktop cat for Claude Code. Meet Arshia!"
   },
   "plugins": [
     {
-      "name": "arshia",
+      "name": "chonkycat",
       "source": "./plugin",
       "description": "Always-on-top animated cat that mirrors Claude Code status: typing, reading, needs-you, subagent kittens, context-window belly and more.",
       "version": "0.1.0",

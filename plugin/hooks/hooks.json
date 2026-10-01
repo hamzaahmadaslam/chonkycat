@@ -1,48 +1,48 @@
 {
-  "description": "Arshia: a chubby desktop cat that mirrors what Claude Code is doing",
+  "description": "Chonky Cat: a chubby desktop cat that mirrors what Claude Code is doing",
   "hooks": {
     "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 20 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 20 }] }
     ],
     "SessionEnd": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ],
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ],
     "PreToolUse": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] },
-      { "matcher": "Bash|PowerShell", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\" guard", "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] },
+      { "matcher": "Bash|PowerShell", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\" guard", "timeout": 5 }] }
     ],
     "PostToolUse": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ],
     "PostToolUseFailure": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ],
     "PermissionRequest": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\" permission", "timeout": 120 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\" permission", "timeout": 120 }] }
     ],
     "Notification": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ],
     "StopFailure": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ],
     "SubagentStart": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ],
     "SubagentStop": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ],
     "PreCompact": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ],
     "PostCompact": [
-      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/arshia-hook.js\"", "async": true, "timeout": 5 }] }
+      { "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/chonky-hook.js\"", "async": true, "timeout": 5 }] }
     ]
   }
 }

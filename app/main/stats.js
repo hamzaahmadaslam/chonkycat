@@ -1,5 +1,5 @@
 'use strict';
-// Fish economy + lifetime stats, persisted in ~/.arshia/stats.json.
+// Fish economy + lifetime stats, persisted in ~/.chonkycat/stats.json.
 const { FILES, readJSON, writeJSON } = require('../shared/config');
 
 const DEFAULT = {

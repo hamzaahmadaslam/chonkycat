@@ -16,7 +16,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
-if (process.env.ARSHIA_NO_GPU || loadSettings().noGpu) app.disableHardwareAcceleration();
+if (process.env.CHONKY_NO_GPU || loadSettings().noGpu) app.disableHardwareAcceleration();
 if (process.platform === 'linux') app.commandLine.appendSwitch('enable-transparent-visuals');
 
 let settings = loadSettings();
@@ -69,7 +69,7 @@ function createOverlay() {
     focusable: true,
     show: false,
     backgroundColor: '#00000000',
-    title: 'Arshia',
+    title: 'Chonky Cat',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -87,7 +87,7 @@ function createOverlay() {
   overlay.on('closed', () => { overlay = null; });
   overlay.webContents.on('console-message', (e) => {
     const lvl = e.level != null ? e.level : '';
-    if (lvl === 'error' || lvl === 'warning' || lvl === 2 || lvl === 3 || process.env.ARSHIA_DEBUG) log('renderer', lvl, e.message, e.sourceId ? `${path.basename(e.sourceId)}:${e.lineNumber}` : '');
+    if (lvl === 'error' || lvl === 'warning' || lvl === 2 || lvl === 3 || process.env.CHONKY_DEBUG) log('renderer', lvl, e.message, e.sourceId ? `${path.basename(e.sourceId)}:${e.lineNumber}` : '');
   });
   overlay.webContents.on('did-finish-load', () => log('overlay loaded', JSON.stringify(overlay.getBounds()), 'visible', overlay.isVisible()));
   overlay.webContents.on('render-process-gone', (_e, details) => {
@@ -100,7 +100,7 @@ function send(channel, payload) {
   if (overlay && !overlay.isDestroyed()) overlay.webContents.send(channel, payload);
 }
 
-// The scene uses the work area of Arshia's display as its coordinate space.
+// The scene uses the work area of the cat's display as its coordinate space.
 // The window itself is only as big as needed (see 'set-viewport') because
 // transparent windows cost GPU time proportional to their area.
 function overlayBounds() {
@@ -130,7 +130,7 @@ function moveToDisplay(pt) {
   return d.workArea;
 }
 
-// Click-through except on Arshia: poll the cursor and toggle mouse events.
+// Click-through except on the cat: poll the cursor and toggle mouse events.
 function pollCursor() {
   if (!overlay || overlay.isDestroyed()) return;
   const p = screen.getCursorScreenPoint();
@@ -343,7 +343,7 @@ function sanitize(p) {
 app.whenReady().then(async () => {
   ensureHome();
   if (process.platform === 'darwin' && app.dock) app.dock.hide();
-  app.setAppUserModelId('dev.arshia.cat');
+  app.setAppUserModelId('dev.chonkycat.app');
 
   try {
     await server.start();
@@ -354,7 +354,7 @@ app.whenReady().then(async () => {
   writeJSON(path.join(HOME, 'launch.json'), { command: process.execPath, args: process.defaultApp ? [app.getAppPath()] : [] });
 
   server.on('event', (ev) => {
-    if (process.env.ARSHIA_DEBUG) log('event', ev.hook_event_name, ev.tool_name || '', ev.notification_type || '', ev.agent_type || '');
+    if (process.env.CHONKY_DEBUG) log('event', ev.hook_event_name, ev.tool_name || '', ev.notification_type || '', ev.agent_type || '');
     sessions.handle(ev);
   });
   server.on('permission', ({ id, ev }) => {

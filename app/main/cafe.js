@@ -44,7 +44,7 @@ class Cafe extends EventEmitter {
   }
 
   key() {
-    return crypto.createHash('sha256').update('arshia-cafe:' + this.cfg.room).digest();
+    return crypto.createHash('sha256').update('chonkycat-cafe:' + this.cfg.room).digest();
   }
 
   sign(body) {

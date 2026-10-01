@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * Arshia hook bridge — Claude Code runs this on hook events.
- *   node arshia-hook.js            forward the event to the Arshia app (run as an async hook)
- *   node arshia-hook.js permission paw-approval: wait for Allow/Deny from the cat (sync hook)
- *   node arshia-hook.js guard      danger sense: force a confirmation prompt for risky commands
- *   node arshia-hook.js launch     start the Arshia app if it isn't running
+ * Chonky Cat hook bridge — Claude Code runs this on hook events.
+ *   node chonky-hook.js            forward the event to the Chonky Cat app (run as an async hook)
+ *   node chonky-hook.js permission paw-approval: wait for Allow/Deny from the cat (sync hook)
+ *   node chonky-hook.js guard      danger sense: force a confirmation prompt for risky commands
+ *   node chonky-hook.js launch     start the Chonky Cat app if it isn't running
  *
  * It must never break Claude Code: every failure path exits 0 with no output.
  */
@@ -16,7 +16,7 @@ const http = require('http');
 const { spawn } = require('child_process');
 const { riskOfCommand } = require('./risk');
 
-const HOME = process.env.ARSHIA_HOME || path.join(os.homedir(), '.arshia');
+const HOME = process.env.CHONKY_HOME || path.join(os.homedir(), '.chonkycat');
 const mode = process.argv[2] || 'event';
 
 const readJSON = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
@@ -57,7 +57,7 @@ function post(rt, route, body, timeoutMs) {
     const data = JSON.stringify(body);
     const req = http.request({
       host: '127.0.0.1', port: rt.port, path: route, method: 'POST', timeout: timeoutMs,
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'x-arshia-token': rt.token },
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'x-chonky-token': rt.token },
     }, (res) => {
       let buf = '';
       res.setEncoding('utf8');
@@ -79,7 +79,7 @@ function launchApp() {
     } else {
       // never installed locally yet — fetch & start the published app
       const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-      child = spawn(npx, ['-y', 'arshia-cat', 'start'], { detached: true, stdio: 'ignore', shell: process.platform === 'win32', windowsHide: true });
+      child = spawn(npx, ['-y', 'chonkycat', 'start'], { detached: true, stdio: 'ignore', shell: process.platform === 'win32', windowsHide: true });
     }
     child.unref();
     return true;

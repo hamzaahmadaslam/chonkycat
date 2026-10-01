@@ -1,4 +1,4 @@
-/* Arshia sounds — all synthesised with WebAudio, so no audio files ship with the app. */
+/* Chonky Cat sounds — all synthesised with WebAudio, so no audio files ship with the app. */
 (function (root) {
   'use strict';
   let ac = null;
@@ -130,7 +130,7 @@
     munch() { noise(0.05, 'bandpass', 1500, 3, 0.3); },
   };
 
-  root.ArshiaSound = {
+  root.CatSound = {
     configure(opts) {
       if (opts.volume != null) { volume = opts.volume; if (master) master.gain.value = volume; }
       if (opts.enabled != null) enabled = opts.enabled;

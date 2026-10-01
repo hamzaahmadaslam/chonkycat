@@ -7,9 +7,9 @@ const path = require('path');
 const OUT = path.join(__dirname, '..', 'docs');
 
 const PAGE = `<!doctype html><html><body style="margin:0">
-<script src="${path.join(__dirname, '..', 'app', 'renderer', 'arshia-art.js').replace(/\\/g, '/')}"></script>
+<script src="${path.join(__dirname, '..', 'app', 'renderer', 'cat-art.js').replace(/\\/g, '/')}"></script>
 <script>
-  const A = window.ArshiaArt;
+  const A = window.CatArt;
   function shot(w, opts, label) {
     const h = Math.round(w * A.H / A.W) + (label ? 34 : 0);
     const c = document.createElement('canvas');
@@ -79,7 +79,7 @@ const PAGE = `<!doctype html><html><body style="margin:0">
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 800, height: 600, webPreferences: { offscreen: true } });
-  const tmp = path.join(app.getPath('temp'), 'arshia-assets.html');
+  const tmp = path.join(app.getPath('temp'), 'chonky-assets.html');
   fs.writeFileSync(tmp, PAGE);
   await win.loadFile(tmp);
   const imgs = await win.webContents.executeJavaScript('render()');

@@ -37,9 +37,9 @@ class EventServer extends EventEmitter {
   route(req, res) {
     const url = new URL(req.url, 'http://127.0.0.1');
     if (req.method === 'GET' && url.pathname === '/health') {
-      return send(res, 200, { ok: true, app: 'arshia' });
+      return send(res, 200, { ok: true, app: 'chonkycat' });
     }
-    if (req.headers['x-arshia-token'] !== this.token) return send(res, 401, { error: 'bad token' });
+    if (req.headers['x-chonky-token'] !== this.token) return send(res, 401, { error: 'bad token' });
     if (req.method !== 'POST') return send(res, 405, { error: 'method' });
     readBody(req, (err, body) => {
       if (err) return send(res, 400, { error: 'body' });

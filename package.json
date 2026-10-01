@@ -1,10 +1,10 @@
 {
-  "name": "arshia-cat",
+  "name": "chonkycat",
   "version": "0.1.0",
-  "description": "Arshia: a chubby, always-on-top desktop cat that shows what Claude Code is doing, live.",
+  "description": "Chonky Cat: meet Arshia, a chubby, always-on-top desktop cat that shows what Claude Code is doing, live.",
   "main": "app/main.js",
   "bin": {
-    "arshia-cat": "bin/arshia.js"
+    "chonkycat": "bin/chonkycat.js"
   },
   "scripts": {
     "start": "electron .",

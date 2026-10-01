@@ -1,9 +1,9 @@
-/* Arshia overlay: the cat, her behaviours, kittens, visitors and all the UI around her. */
+/* Chonky Cat overlay: the cat, her behaviours, kittens, visitors and all the UI around her. */
 (function () {
   'use strict';
-  const A = window.ArshiaArt;
-  const SND = window.ArshiaSound;
-  const api = window.arshia || mockApi();
+  const A = window.CatArt;
+  const SND = window.CatSound;
+  const api = window.chonky || mockApi();
   const TAU = Math.PI * 2;
   const $ = (id) => document.getElementById(id);
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -99,7 +99,7 @@
 
   // ============================================================ behaviours --
   // Each behaviour: { pri, dur | (env,p)=>dur, idle?, weight?, busyOk?, cond?, start?, frame(env,k,s,p)->overrides, end?, while? }
-  // Overrides may contain any ArshiaArt.draw option plus sx/sy/rot/dx/dy/flip/done.
+  // Overrides may contain any CatArt.draw option plus sx/sy/rot/dx/dy/flip/done.
   const B = {};
   const PHRASES = ['Mrrp?', 'Is it snack o’clock?', 'I supervise. Professionally.', 'Your code smells like fish. Nice.', 'Prrrrr…', '*stares at a bug only I can see*', 'I knocked nothing over. Yet.', 'Did someone say tuna?', 'Loaf mode: engaged.', 'I’m not fat, I’m context-rich.'];
 
@@ -1372,7 +1372,7 @@
     }
   }
 
-  // cursor play: if the pointer rests near Arshia, she stalks and pounces on it
+  // cursor play: if the pointer rests near the cat, she stalks and pounces on it
   function updateCursorPlay(t) {
     if (!settings.cursorPlay || !cursor.inside || drag || hover.on) return;
     if (director.cur || status.state === 'needs' || status.state === 'danger' || status.state === 'sleep') return;
@@ -1490,6 +1490,8 @@
     if (sizeChanged) { sizeCat(); catCache.clear(); miniCache.clear(); }
     if (skinChanged) { catCache.clear(); miniCache.clear(); }
     if (skinChanged) makeTrayIcon();
+    const ask = document.getElementById('ask-input');
+    if (ask) ask.placeholder = `Ask ${s.name}… (what’s Claude doing?)`;
   }
 
   function onStatus(s) {
@@ -1531,7 +1533,7 @@
 
   // ============================================================ viewport --
   // Transparent windows cost GPU time in proportion to their area, so the window
-  // hugs Arshia (plus room for bubbles) and only grows when the scene needs it.
+  // hugs the cat (plus room for bubbles) and only grows when the scene needs it.
   function updateViewport(t) {
     if (vp.pending) return;
     const big = kittens.size > 0 || visitors.length > 0 || sprites.length > 0 || smudges.length > 0 || cat.mode === 'drag' || cat.mode === 'air' || cat.mode === 'hop' || particles.some((p) => p.kind === 'confetti' || p.kind === 'dream');

@@ -1,5 +1,5 @@
 'use strict';
-// Desktop awareness: where are the user's windows? Used to perch Arshia on title
+// Desktop awareness: where are the user's windows? Used to perch the cat on title
 // bars and to run over to the terminal/editor of the session that needs you.
 // Windows: a persistent PowerShell helper calling Win32 (no native modules).
 // macOS:   JXA via osascript (needs Accessibility permission; fails quietly).
@@ -19,7 +19,7 @@ using System;
 using System.Text;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-public static class ArshiaWin {
+public static class ChonkyWin {
   public delegate bool EnumProc(IntPtr h, IntPtr l);
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
@@ -61,13 +61,13 @@ public static class ArshiaWin {
   }
 }
 "@
-[void][ArshiaWin]::SetProcessDPIAware()
+[void][ChonkyWin]::SetProcessDPIAware()
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 while ($true) {
   $line = [Console]::In.ReadLine()
   if ($line -eq $null) { break }
-  if ($line -eq 'fg') { [Console]::Out.WriteLine([ArshiaWin]::Foreground()) }
-  elseif ($line -eq 'list') { [Console]::Out.WriteLine([ArshiaWin]::List()) }
+  if ($line -eq 'fg') { [Console]::Out.WriteLine([ChonkyWin]::Foreground()) }
+  elseif ($line -eq 'list') { [Console]::Out.WriteLine([ChonkyWin]::List()) }
   else { [Console]::Out.WriteLine('null') }
   [Console]::Out.Flush()
 }
@@ -85,7 +85,7 @@ class Desktop {
   start() {
     if (this.platform !== 'win32') return;
     try {
-      const file = path.join(os.tmpdir(), 'arshia-desktop-' + process.pid + '.ps1');
+      const file = path.join(os.tmpdir(), 'chonky-desktop-' + process.pid + '.ps1');
       fs.writeFileSync(file, PS_SCRIPT);
       this.scriptFile = file;
       this.ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', file], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });

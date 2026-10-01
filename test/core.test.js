@@ -96,7 +96,7 @@ test('git and test results become reactions', () => {
 });
 
 test('transcript tail gives context usage without reading the whole file', () => {
-  const f = path.join(os.tmpdir(), `arshia-test-${process.pid}.jsonl`);
+  const f = path.join(os.tmpdir(), `chonky-test-${process.pid}.jsonl`);
   const filler = JSON.stringify({ type: 'user', message: { role: 'user', content: 'x'.repeat(1000) } });
   const lines = [];
   for (let i = 0; i < 600; i++) lines.push(filler);
@@ -121,9 +121,9 @@ test('Ask Arshia answers from live state', () => {
 });
 
 test('hook guard asks before risky commands and stays silent otherwise', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'arshia-home-'));
-  const hook = path.join(__dirname, '..', 'plugin', 'scripts', 'arshia-hook.js');
-  const run = (mode, ev) => spawnSync(process.execPath, [hook, mode], { input: JSON.stringify(ev), env: Object.assign({}, process.env, { ARSHIA_HOME: home }), encoding: 'utf8' });
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'chonky-home-'));
+  const hook = path.join(__dirname, '..', 'plugin', 'scripts', 'chonky-hook.js');
+  const run = (mode, ev) => spawnSync(process.execPath, [hook, mode], { input: JSON.stringify(ev), env: Object.assign({}, process.env, { CHONKY_HOME: home }), encoding: 'utf8' });
   const risky = run('guard', { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'git push --force' } });
   assert.strictEqual(risky.status, 0);
   const out = JSON.parse(risky.stdout);

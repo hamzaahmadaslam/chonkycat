@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
-<title>Arshia settings</title>
+<title>Chonky Cat settings</title>
 <style>
   :root { --bg: #fff8ef; --card: #ffffff; --ink: #4a2a17; --soft: #8a6a52; --edge: #ead8c3; --accent: #f08a3c; }
   @media (prefers-color-scheme: dark) {
@@ -45,13 +45,13 @@
   <canvas id="hero" width="240" height="228"></canvas>
   <div>
     <h1 id="title">Arshia</h1>
-    <p>Your Claude Code companion. Changes save instantly.</p>
+    <p><b>Chonky Cat</b> · your Claude Code companion. Changes save instantly.</p>
   </div>
 </header>
 <main>
   <section>
     <h2>🐱 Your cat</h2>
-    <div class="row"><label for="name">Name</label><input id="name" type="text" maxlength="24"></div>
+    <div class="row"><label for="name">Name<small>Default: Arshia. Pick a suggestion or type your own.</small></label><input id="name" type="text" maxlength="24" list="names"><datalist id="names"><option>Arshia</option><option>Mochi</option><option>Biscuit</option><option>Noodle</option><option>Pudding</option><option>Mittens</option><option>Tofu</option><option>Waffles</option></datalist><button class="btn" id="resetName" type="button" title="Back to Arshia">↺</button></div>
     <div class="skins" id="skins"></div>
     <div class="row"><label for="size">Size<small>How big she is on screen</small></label><input id="size" type="range" min="110" max="360" step="10"></div>
     <div class="row"><label for="fps">Smoothness<small>Higher looks smoother, uses more CPU</small></label><select id="fps"><option value="20">Battery saver (20 fps)</option><option value="24">Balanced (24 fps)</option><option value="30">Smooth (30 fps)</option><option value="45">Silky (45 fps)</option><option value="60">Buttery (60 fps)</option></select></div>
@@ -76,16 +76,16 @@
 
   <section>
     <h2>🛡️ Claude Code</h2>
-    <div class="row"><label for="pawApproval">Paw approval<small>Approve or deny Claude’s permission requests from a card next to Arshia. If you don’t answer in time, Claude asks in the terminal as usual.</small></label><input id="pawApproval" type="checkbox"></div>
+    <div class="row"><label for="pawApproval">Paw approval<small>Approve or deny Claude’s permission requests from a card next to your cat. If you don’t answer in time, Claude asks in the terminal as usual.</small></label><input id="pawApproval" type="checkbox"></div>
     <div class="row"><label for="pawApprovalTimeout">Paw approval timeout (seconds)</label><input id="pawApprovalTimeout" type="number" min="5" max="110"></div>
     <div class="row"><label for="dangerGuard">Danger sense guard<small>Always ask before risky commands (rm -rf, force push, DROP TABLE…), even in auto-accept modes</small></label><input id="dangerGuard" type="checkbox"></div>
-    <div class="row"><label for="autoStart">Start with Claude Code<small>Wake Arshia automatically when a session starts</small></label><input id="autoStart" type="checkbox"></div>
+    <div class="row"><label for="autoStart">Start with Claude Code<small>Wake your cat automatically when a session starts</small></label><input id="autoStart" type="checkbox"></div>
     <div class="row"><label for="dnd">Do not disturb<small>No sounds, bubbles or visitors</small></label><input id="dnd" type="checkbox"></div>
   </section>
 
   <section>
     <h2>🪟 Desktop</h2>
-    <div class="row"><label for="desktopAwareness">Desktop awareness<small>Let Arshia see where your windows are</small></label><input id="desktopAwareness" type="checkbox"></div>
+    <div class="row"><label for="desktopAwareness">Desktop awareness<small>Let your cat see where your windows are</small></label><input id="desktopAwareness" type="checkbox"></div>
     <div class="row"><label for="perchOnWindows">Perch on window title bars</label><input id="perchOnWindows" type="checkbox"></div>
     <div class="row"><label for="runToWindow">Run to the window that needs you<small>Then tap on the glass with her paw</small></label><input id="runToWindow" type="checkbox"></div>
     <div class="row"><label for="breakGuardian">Break guardian<small>Lies across your screen after a long stretch of work</small></label><input id="breakGuardian" type="checkbox"></div>
@@ -113,7 +113,7 @@
   </section>
 </main>
 <div class="saved" id="saved">Saved ✓</div>
-<script src="arshia-art.js"></script>
+<script src="cat-art.js"></script>
 <script src="settings.js"></script>
 </body>
 </html>

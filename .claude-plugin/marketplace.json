@@ -12,7 +12,7 @@
       "name": "chonkycat",
       "source": "./plugin",
       "description": "Always-on-top animated cat that mirrors Claude Code status: typing, reading, needs-you, subagent kittens, context-window belly and more.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "category": "productivity"
     }
   ]

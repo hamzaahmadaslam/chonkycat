@@ -1,6 +1,6 @@
 {
   "name": "chonkycat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Chonky Cat: meet Arshia, a chubby, always-on-top desktop cat that shows what Claude Code is doing, live.",
   "main": "app/main.js",
   "bin": {

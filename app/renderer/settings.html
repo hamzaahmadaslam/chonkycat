@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Arshia settings</title>
+<style>
+  :root { --bg: #fff8ef; --card: #ffffff; --ink: #4a2a17; --soft: #8a6a52; --edge: #ead8c3; --accent: #f08a3c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1e1915; --card: #2a231d; --ink: #f6e7d5; --soft: #bba189; --edge: #45372b; --accent: #f7a552; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 "Trebuchet MS", "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 14px; padding: 18px 20px 6px; }
+  header canvas { width: 120px; height: 114px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 2px 0 0; color: var(--soft); font-size: 13px; }
+  main { padding: 6px 20px 30px; }
+  section { background: var(--card); border: 1.5px solid var(--edge); border-radius: 14px; padding: 12px 16px; margin: 12px 0; }
+  section h2 { margin: 0 0 8px; font-size: 15px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px dashed var(--edge); }
+  .row:first-of-type { border-top: 0; }
+  .row label { flex: 1; }
+  .row small { display: block; color: var(--soft); font-size: 12px; }
+  input[type=text], input[type=number], select { font: inherit; padding: 5px 8px; border-radius: 8px; border: 1.5px solid var(--edge); background: var(--bg); color: var(--ink); min-width: 150px; }
+  input[type=range] { width: 160px; accent-color: var(--accent); }
+  input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+  .skins { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .skin { border: 2px solid var(--edge); border-radius: 12px; background: var(--bg); padding: 4px; cursor: pointer; text-align: center; font-size: 12px; color: var(--ink); }
+  .skin canvas { width: 100%; height: auto; display: block; }
+  .skin.on { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+  .fx { display: flex; flex-wrap: wrap; gap: 6px; }
+  .fx button, .btn { font: inherit; font-size: 12.5px; padding: 5px 10px; border-radius: 9px; border: 1.5px solid var(--edge); background: var(--bg); color: var(--ink); cursor: pointer; }
+  .fx button:hover, .btn:hover { border-color: var(--accent); }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .stat { background: var(--bg); border-radius: 10px; padding: 8px; text-align: center; }
+  .stat b { display: block; font-size: 20px; }
+  .stat span { color: var(--soft); font-size: 12px; }
+  .saved { position: fixed; right: 16px; bottom: 14px; background: #3bb273; color: #fff; padding: 6px 12px; border-radius: 10px; opacity: 0; transition: opacity .3s; }
+  .saved.on { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <canvas id="hero" width="240" height="228"></canvas>
+  <div>
+    <h1 id="title">Arshia</h1>
+    <p>Your Claude Code companion. Changes save instantly.</p>
+  </div>
+</header>
+<main>
+  <section>
+    <h2>🐱 Your cat</h2>
+    <div class="row"><label for="name">Name</label><input id="name" type="text" maxlength="24"></div>
+    <div class="skins" id="skins"></div>
+    <div class="row"><label for="size">Size<small>How big she is on screen</small></label><input id="size" type="range" min="110" max="360" step="10"></div>
+    <div class="row"><label for="fps">Smoothness<small>Higher looks smoother, uses more CPU</small></label><select id="fps"><option value="20">Battery saver (20 fps)</option><option value="24">Balanced (24 fps)</option><option value="30">Smooth (30 fps)</option><option value="45">Silky (45 fps)</option><option value="60">Buttery (60 fps)</option></select></div>
+  </section>
+
+  <section>
+    <h2>✨ Personality</h2>
+    <div class="row"><label for="randomAnimations">Random antics<small>Grooming, zoomies, butterflies, naps, boxes…</small></label><input id="randomAnimations" type="checkbox"></div>
+    <div class="row"><label for="animationFrequency">How often<small>Calm ↔ hyper</small></label><input id="animationFrequency" type="range" min="0.4" max="2.5" step="0.1"></div>
+    <div class="row"><label for="cursorPlay">Pounce on the mouse cursor</label><input id="cursorPlay" type="checkbox"></div>
+    <div class="row"><label for="seasonal">Seasonal outfits<small>Pumpkin hat in October, nightcap at night</small></label><input id="seasonal" type="checkbox"></div>
+    <div class="row"><label for="showStatusLine">Show status line<small>“Editing app.ts · belly 42%”</small></label><input id="showStatusLine" type="checkbox"></div>
+  </section>
+
+  <section>
+    <h2>🔊 Sound & voice</h2>
+    <div class="row"><label for="sounds">Meows, purrs and jingles</label><input id="sounds" type="checkbox"></div>
+    <div class="row"><label for="volume">Volume</label><input id="volume" type="range" min="0" max="1" step="0.05"></div>
+    <div class="row"><label for="speakSummaries">Read finished tasks aloud<small>Uses your system’s text-to-speech, offline</small></label><input id="speakSummaries" type="checkbox"></div>
+    <div class="row"><label for="voice">Voice</label><select id="voice"><option value="">System default</option></select></div>
+  </section>
+
+  <section>
+    <h2>🛡️ Claude Code</h2>
+    <div class="row"><label for="pawApproval">Paw approval<small>Approve or deny Claude’s permission requests from a card next to Arshia. If you don’t answer in time, Claude asks in the terminal as usual.</small></label><input id="pawApproval" type="checkbox"></div>
+    <div class="row"><label for="pawApprovalTimeout">Paw approval timeout (seconds)</label><input id="pawApprovalTimeout" type="number" min="5" max="110"></div>
+    <div class="row"><label for="dangerGuard">Danger sense guard<small>Always ask before risky commands (rm -rf, force push, DROP TABLE…), even in auto-accept modes</small></label><input id="dangerGuard" type="checkbox"></div>
+    <div class="row"><label for="autoStart">Start with Claude Code<small>Wake Arshia automatically when a session starts</small></label><input id="autoStart" type="checkbox"></div>
+    <div class="row"><label for="dnd">Do not disturb<small>No sounds, bubbles or visitors</small></label><input id="dnd" type="checkbox"></div>
+  </section>
+
+  <section>
+    <h2>🪟 Desktop</h2>
+    <div class="row"><label for="desktopAwareness">Desktop awareness<small>Let Arshia see where your windows are</small></label><input id="desktopAwareness" type="checkbox"></div>
+    <div class="row"><label for="perchOnWindows">Perch on window title bars</label><input id="perchOnWindows" type="checkbox"></div>
+    <div class="row"><label for="runToWindow">Run to the window that needs you<small>Then tap on the glass with her paw</small></label><input id="runToWindow" type="checkbox"></div>
+    <div class="row"><label for="breakGuardian">Break guardian<small>Lies across your screen after a long stretch of work</small></label><input id="breakGuardian" type="checkbox"></div>
+    <div class="row"><label for="breakMinutes">Break after (minutes)</label><input id="breakMinutes" type="number" min="15" max="300"></div>
+    <div class="row"><label for="launchAtLogin">Launch at login</label><input id="launchAtLogin" type="checkbox"></div>
+    <div class="row"><label for="hotkey">Show/hide hotkey</label><input id="hotkey" type="text"></div>
+  </section>
+
+  <section>
+    <h2>☕ Cat café (LAN)</h2>
+    <div class="row"><label for="cafeEnabled">Join the café<small>When a teammate’s Claude finishes something, their cat visits your screen. Only your cat’s name, skin and the event type are shared, on your local network.</small></label><input id="cafeEnabled" type="checkbox"></div>
+    <div class="row"><label for="cafeRoom">Room code<small>Everyone in the café uses the same code</small></label><input id="cafeRoom" type="text" maxlength="40"></div>
+    <div class="row"><label for="cafeName">Your display name</label><input id="cafeName" type="text" maxlength="24"></div>
+    <div class="row"><label for="cafeProject">Share project names</label><input id="cafeProject" type="checkbox"></div>
+  </section>
+
+  <section>
+    <h2>🎬 Preview reactions</h2>
+    <div class="fx" id="fx"></div>
+  </section>
+
+  <section>
+    <h2>🐟 Stats</h2>
+    <div class="stats" id="stats"></div>
+  </section>
+</main>
+<div class="saved" id="saved">Saved ✓</div>
+<script src="arshia-art.js"></script>
+<script src="settings.js"></script>
+</body>
+</html>

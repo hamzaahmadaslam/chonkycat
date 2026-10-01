@@ -1,0 +1,18 @@
+{
+  "name": "arshia",
+  "owner": {
+    "name": "Arshia contributors"
+  },
+  "metadata": {
+    "description": "Arshia: the chubby desktop cat for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "arshia",
+      "source": "./plugin",
+      "description": "Always-on-top animated cat that mirrors Claude Code status: typing, reading, needs-you, subagent kittens, context-window belly and more.",
+      "version": "0.1.0",
+      "category": "productivity"
+    }
+  ]
+}

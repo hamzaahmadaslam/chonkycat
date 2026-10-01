@@ -1,0 +1,176 @@
+<p align="center">
+  <img src="docs/hero.png" width="300" alt="Arshia, a chubby orange tabby cat with a teal collar and a golden bell">
+</p>
+
+<h1 align="center">Arshia</h1>
+
+<p align="center"><b>A chubby, always-on-top desktop cat that shows you what Claude Code is doing — live.</b><br>
+She types when Claude edits, reads when it reads, gets fatter as the context window fills up, burps when you <code>/compact</code>, sends kittens out for subagents, and comes over to tap on your screen when Claude needs you.</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#what-makes-arshia-different">Features</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#settings">Settings</a> ·
+  <a href="#faq">FAQ</a>
+</p>
+
+---
+
+<p align="center"><img src="docs/states.png" alt="Arshia reacting to Claude Code: thinking, editing on a laptop, reading with glasses, terminal, web search with binoculars, planning with a clipboard, waving because Claude needs you, puffed up on a dangerous command, celebrating, dizzy after a failed tool, stamping a commit, asleep in a nightcap"></p>
+
+## Install
+
+You need **Node 18+** and **Claude Code**. Two steps:
+
+**1. Connect her to Claude Code** (inside Claude Code):
+
+```
+/plugin marketplace add <github-user>/arshia
+/plugin install arshia@arshia
+```
+
+**2. Wake her up** (in any terminal):
+
+```bash
+npx arshia-cat
+```
+
+That’s it. From now on she starts by herself whenever a Claude Code session begins. Works in the Claude Code CLI, the desktop app and IDE extensions — anything that runs Claude Code hooks — on Windows, macOS and Linux.
+
+> Prefer not to use the plugin system? `npx arshia-cat install-hooks` adds the same hooks to `~/.claude/settings.json` (with a backup), and `npx arshia-cat uninstall-hooks` removes them.
+
+Want to see everything she can do right now? Run `npx arshia-cat demo`.
+
+## What makes Arshia different
+
+There are a few Claude Code desktop pets around. Arshia does the usual (thinking, working, needs-you, done) and then a lot more:
+
+| | Feature | What happens |
+|---|---|---|
+| 🍔 | **Context-window belly** | Arshia literally gets chubbier as your context window fills. Run `/compact` and she munches through the conversation, then *burps* and slims down. |
+| 🐱 | **Subagent kittens** | Every subagent Claude starts pops out as a little kitten with a name tag (`Explore`, `Plan`…) that walks off and works on its own tiny laptop, then trots home carrying a fish when it’s done. |
+| 🙀 | **Danger sense** | Before `rm -rf`, `git push --force`, `git reset --hard`, `DROP TABLE`, `curl … \| sh` and friends, her fur puffs up and she hisses. The guard also forces Claude Code to *ask* before those commands — even in auto-accept mode. |
+| 🐾 | **Paw approval** *(opt-in)* | Approve or deny Claude’s permission requests from a card next to Arshia. Risky commands need two clicks. Don’t answer and Claude simply asks in the terminal as usual. |
+| 🪟 | **She comes to find you** | When a session has been waiting on you for a while, Arshia runs over to that terminal/editor window, sits on its title bar and taps on the glass — leaving little paw smudges. |
+| 🪑 | **Window perching** | She hops onto the title bar of the window you’re using and tumbles off (“Hey, I was sitting there!”) when you drag it. |
+| 📦 | **Git theater** | `git commit` → she stamps a parcel with a paw print. `git push` → the parcel launches on a rocket. Green tests → party hat and confetti. Red tests → she looks you in the eye and pushes a coffee cup off the edge. |
+| 🐟 | **Fish economy** | Every finished task earns a fish. Keep a daily streak going and she earns a crown. Feed her from the menu — she gets grumpy when she’s hungry. |
+| 🧘 | **Break guardian** | After 90 minutes of non-stop work she walks to the middle of the screen, flops over and suggests a stretch. |
+| 💬 | **Ask Arshia** | Right-click → *Ask Arshia*: “what’s Claude doing?”, “summary”, “how full are you?”, “stats”. Answers come from your live sessions, locally, in cat voice. She can also read finished tasks aloud. |
+| ☕ | **Cat café (LAN)** | Opt-in: when a teammate’s Claude finishes something, *their* cat walks across *your* screen and waves. Signed with a shared room code; only the cat’s name, skin and the event type are shared. |
+| 🎭 | **60+ animations** | Grooming, yawns, stretches, kneading biscuits, sneezes, hiccups, zoomies, tail chasing, barrel rolls, butterflies, yarn, “if I fits I sits”, bird-watching, morning coffee, stargazing, dancing, peekaboo, naps with fish dreams, pouncing on your cursor… picked at random so she never feels scripted. |
+| 🎃 | **Seasons & time of day** | Pumpkin hat in October, nightcap at night, coffee in the morning. |
+
+<p align="center"><img src="docs/fun.png" alt="Arshia thin at 10% context and very round at 90%, a subagent kitten, sitting in a box, heart eyes when petted, party hat, pumpkin hat, streak crown"></p>
+
+### Play with her
+
+- **Hover** — she purrs and her eyes turn into hearts; a roster of your sessions appears.
+- **Click** — boop. **Double-click** — she jumps.
+- **Drag & throw** — she dangles, flies, bounces off the screen edges and lands with a squash (too hard and she’s dizzy).
+- **Right-click** — menu: ask, feed, play, nap, box, do-not-disturb, settings.
+- **Leave your cursor still near her** — she crouches, wiggles… and pounces.
+- `Ctrl+Alt+A` hides/shows her.
+
+### Skins
+
+<p align="center"><img src="docs/skins.png" alt="Four skins: orange tabby, grey British shorthair, tuxedo with a red bow collar, and calico"></p>
+
+Her name defaults to **Arshia** — rename her in Settings. Every pixel is drawn live by a procedural vector engine (no sprite sheets), which is why she can get gradually rounder, tilt her head, hold props and blend moods.
+
+## How it works
+
+```
+Claude Code ──hooks──▶ arshia-hook.js ──HTTP (127.0.0.1 + token)──▶ Arshia app ──▶ transparent always-on-top window
+```
+
+1. The plugin registers async hooks for `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SubagentStart/Stop`, `PreCompact/PostCompact`, `SessionEnd` and (sync) `PermissionRequest`.
+2. `arshia-hook.js` trims each payload (file contents are never sent) and POSTs it to the app on `127.0.0.1`, authenticated with a random per-install token. If the app isn’t running, the hook exits silently in milliseconds — **it can never slow down or break Claude Code**. On `SessionStart` it launches the app.
+3. The app keeps a small state machine per session, mirrors the most urgent one (danger › needs-you › error › working › thinking › done › idle), and reads the **tail** of the transcript to measure context-window usage.
+4. The overlay renders Arshia with Canvas 2D. The window hugs her (it only grows to full screen while kittens, visitors or confetti need the room) and drops to 8–12 fps when she’s just napping, to stay light.
+
+### Privacy
+
+- Everything stays on your machine. No accounts, no telemetry, no update pings.
+- The hook drops file contents and tool output before sending anything to the app.
+- The event server only listens on `127.0.0.1` and requires a token stored in `~/.arshia/runtime.json`.
+- The cat café is off by default; when on, it broadcasts only on your local network and only the cat’s name, skin and event type (project names only if you allow it).
+- Desktop awareness only reads window positions and titles, to find the terminal of the session that needs you; nothing is stored.
+
+## Settings
+
+Right-click Arshia → **Settings…** (or the tray icon). Everything saves instantly and lives in `~/.arshia/settings.json`.
+
+| Setting | Default | |
+|---|---|---|
+| Name | Arshia | Rename your cat |
+| Skin | Orange tabby | Orange tabby, Grey loaf, Tuxedo, Calico |
+| Size / smoothness | 190 px / 24 fps | |
+| Random antics, frequency, cursor pouncing, seasonal outfits | on | |
+| Sounds (synthesised meows, purrs, jingles), volume | on | Text-to-speech summaries are opt-in |
+| Paw approval | off | Approve permission requests from the cat |
+| Danger sense guard | on | Always ask before risky shell commands |
+| Start with Claude Code | on | Launched by the `SessionStart` hook |
+| Desktop awareness, perching, run to window | on | |
+| Break guardian | 90 min | |
+| Cat café | off | Room code + display name |
+| Do not disturb | off | No sounds, bubbles or visitors |
+
+## CLI
+
+```bash
+npx arshia-cat            # start (same as `start`)
+npx arshia-cat stop
+npx arshia-cat status     # is she awake? + stats
+npx arshia-cat demo       # plays every Claude Code reaction once
+npx arshia-cat doctor     # checks Node, Electron, hooks, connectivity
+npx arshia-cat install-hooks / uninstall-hooks
+```
+
+Inside Claude Code, `/arshia` wakes her up too.
+
+## FAQ
+
+**Does it work with several Claude Code sessions at once?**
+Yes. She mirrors the most urgent session, kittens belong to their session, and hovering shows a roster of every session with its own context meter.
+
+**Will the danger guard block my commands?**
+No — it only makes Claude Code *ask* you first for the risky ones (`permissionDecision: "ask"`). Turn it off in Settings if you prefer.
+
+**How much CPU does she use?**
+About 1% of a modern CPU while napping, a bit more while animating. Choose *Battery saver* in Settings to go lower.
+
+**macOS / Linux?**
+Supported. Desktop awareness uses AppleScript on macOS (grant Accessibility permission if you want perching) and `xdotool`/`wmctrl` on Linux (optional). Click-through and always-on-top work everywhere Electron does.
+
+**Uninstall**
+`/plugin uninstall arshia@arshia`, `npx arshia-cat stop`, and delete `~/.arshia`.
+
+## Development
+
+```bash
+git clone https://github.com/<github-user>/arshia && cd arshia
+npm install
+npm start                 # run the app from source
+npm test                  # unit tests (risk rules, state machine, transcript, hook script)
+npm run preview           # http://127.0.0.1:5174 — every pose, live, in the browser
+claude --plugin-dir ./plugin   # try the plugin without installing it
+```
+
+Project layout:
+
+```
+app/main.js               Electron main: window, tray, IPC
+app/main/                 event server, session state machine, transcript reader, desktop awareness, café, stats, Ask
+app/renderer/arshia-art.js  the procedural art engine (cat, props, hats, expressions)
+app/renderer/overlay.js   behaviours (60+), physics, kittens, visitors, bubbles, menus
+plugin/                   the Claude Code plugin (hooks + /arshia command)
+.claude-plugin/marketplace.json   makes this repo a plugin marketplace
+```
+
+Ideas, new skins and new antics are very welcome — a new behaviour is usually ~10 lines in `overlay.js`.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Arshia is a fan-made companion and is not affiliated with Anthropic.

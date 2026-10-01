@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Arshia Bench</title></head>
+<body style="font:14px system-ui;background:#fff;color:#222;padding:16px">
+<pre id="out">running…</pre>
+<script src="../app/renderer/arshia-art.js"></script>
+<script>
+  const A = window.ArshiaArt;
+  const c = document.createElement('canvas');
+  c.width = 190; c.height = 181;
+  const x = c.getContext('2d');
+  x.setTransform(190 / 420, 0, 0, 190 / 420, 0, 0);
+  function bench(label, opts) {
+    for (let i = 0; i < 10; i++) A.draw(x, opts);
+    const t0 = performance.now();
+    for (let i = 0; i < 120; i++) { x.clearRect(0, 0, 420, 400); A.draw(x, Object.assign({ t: i * 0.03 }, opts)); }
+    return `${label.padEnd(10)} ${((performance.now() - t0) / 120).toFixed(2)} ms/frame`;
+  }
+  setTimeout(() => {
+    document.getElementById('out').textContent = [
+      bench('idle', { state: 'idle' }),
+      bench('working', { state: 'working', prop: 'laptop' }),
+      bench('done', { state: 'done' }),
+      bench('danger', { state: 'danger' }),
+      bench('sleep', { state: 'sleep' }),
+    ].join('\n');
+  }, 300);
+</script>
+</body>
+</html>

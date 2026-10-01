@@ -1,0 +1,22 @@
+{
+  "name": "arshia-cat",
+  "version": "0.1.0",
+  "description": "Arshia: a chubby, always-on-top desktop cat that shows what Claude Code is doing, live.",
+  "main": "app/main.js",
+  "bin": {
+    "arshia-cat": "bin/arshia.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "preview": "node scripts/serve.js 5174",
+    "assets": "electron scripts/render-assets.js",
+    "test": "node --test"
+  },
+  "keywords": ["claude-code", "desktop-pet", "cat", "electron", "hooks", "status"],
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "files": ["app/", "bin/", "plugin/", "README.md", "LICENSE"],
+  "dependencies": {
+    "electron": "^44.5.1"
+  }
+}

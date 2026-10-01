@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Arshia</title>
+<link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="fx"></canvas>
+  <canvas id="cat"></canvas>
+
+  <div id="bubble" class="bubble hidden" role="status" aria-live="polite"></div>
+  <div id="status" class="pill hidden"></div>
+
+  <div id="roster" class="panel hidden"></div>
+
+  <div id="perm" class="panel perm hidden" role="dialog" aria-label="Permission request">
+    <div class="perm-title"></div>
+    <code class="perm-cmd"></code>
+    <div class="perm-actions">
+      <button class="btn allow">Allow 🐾</button>
+      <button class="btn deny">Deny ✋</button>
+      <button class="btn later" title="Answer in Claude Code instead">Ask in terminal</button>
+    </div>
+    <div class="perm-timer"><span></span></div>
+  </div>
+
+  <div id="menu" class="panel menu hidden" role="menu"></div>
+
+  <form id="ask" class="panel ask hidden" autocomplete="off">
+    <input id="ask-input" maxlength="300" placeholder="Ask Arshia… (what’s Claude doing?)">
+    <button class="btn" type="submit">Ask</button>
+  </form>
+
+  <div id="toast" class="toast hidden"></div>
+</div>
+
+  <script src="arshia-art.js"></script>
+  <script src="sound.js"></script>
+  <script src="overlay.js"></script>
+</body>
+</html>

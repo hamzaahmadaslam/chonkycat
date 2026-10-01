@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arshia Preview</title>
+<style>
+  :root { --bg: #f6f1ea; --card: #fffaf3; --text: #3b2a1e; --muted: #8a7563; --accent: #e0843a; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #1d1915; --card: #2a241e; --text: #f3e6d6; --muted: #b5a08a; --accent: #f7a552; }
+  }
+  :root[data-theme="dark"] { --bg: #1d1915; --card: #2a241e; --text: #f3e6d6; --muted: #b5a08a; --accent: #f7a552; }
+  body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p { color: var(--muted); margin: 0 0 16px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  button, select { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); background: var(--card); color: var(--text); cursor: pointer; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border-radius: 14px; padding: 10px; text-align: center; }
+  .card canvas { display:block; margin:0 auto; }
+  .card b { display: block; font-weight: 600; }
+  .hero { display: flex; justify-content: center; margin-bottom: 16px; }
+  
+</style>
+</head>
+<body>
+<h1>Arshia</h1>
+<p>Illustrated engine preview. Every frame is drawn live.</p>
+<div class="controls">
+  <label>Skin <select id="skin"></select></label>
+  <label>Context <input id="fat" type="range" min="0" max="100" value="25"></label>
+  <button id="burp">Burp (/compact)</button>
+  
+</div>
+<div class="hero"><canvas id="hero"></canvas></div>
+<div class="grid" id="grid"></div>
+<script src="../app/renderer/arshia-art.js"></script>
+<script>
+  const E = window.ArshiaArt;
+  const GRID = location.search.includes('grid');
+  if (GRID) { document.querySelector('.hero').style.display = 'none'; document.getElementById('grid').style.gridTemplateColumns = 'repeat(auto-fill, minmax(150px, 1fr))'; }
+  const STATES = [
+    ['idle', 'Idle', {}],
+    ['thinking', 'Thinking', {}],
+    ['working', 'Typing (Edit)', { prop: 'laptop' }],
+    ['working', 'Reading (Read/Grep)', { prop: 'book', eyes: 'half' }],
+    ['working', 'Terminal (Bash)', { prop: 'terminal' }],
+    ['working', 'Browsing (Web)', { prop: 'binoculars' }],
+    ['working', 'Planning (Todo)', { prop: 'clipboard' }],
+    ['idle', 'Git commit stamp', { prop: 'package', stamped: 1, raise: { side: -1, x: 120, y: 250, hold: 'stamp' } }],
+    ['needs', 'Needs you', { wave: 1 }],
+    ['idle', 'Knock on glass', { knock: 1 }],
+    ['done', 'Done', {}],
+    ['danger', 'Danger sense', {}],
+    ['error', 'Tool failed', {}],
+    ['error', 'Rate limited', { prop: 'hourglass', eyes: 'half', mouth: 'flat' }],
+    ['sleep', 'Asleep', { hat: 'nightcap' }],
+    ['idle', 'Groom paw', { raise: { side: 1, x: 236, y: 190, r: 20 }, eyes: 'closed', mouth: 'blep', headTilt: -0.12 }],
+    ['idle', 'Coffee', { raise: { side: 1, x: 262, y: 220, hold: 'mug' }, eyes: 'half' }],
+    ['idle', 'Eat fish', { raise: { side: 1, x: 236, y: 215, hold: 'fish' }, mouth: 'munch', eyes: 'happy' }],
+    ['idle', 'In a box', { prop: 'box', eyes: 'happy' }],
+    ['idle', 'Petted (heart eyes)', { eyes: 'heart', mouth: 'w', headTilt: 0.15 }],
+    ['idle', 'Knead biscuits', { pawLift: [10, 0], eyes: 'half' }],
+    ['idle', 'Curious tilt', { headTilt: 0.22, ears: 'one', mouth: 'o' }],
+    ['idle', 'Meow', { mouth: 'meow', ears: 'perk' }],
+    ['idle', 'Zoomies pant', { pose: 'walk', mouth: 'pant', eyes: 'wide' }],
+    ['idle', 'Party', { hat: 'party', eyes: 'star', mouth: 'smile' }],
+    ['idle', 'October', { hat: 'pumpkin' }],
+    ['idle', 'Streak crown', { hat: 'crown', eyes: 'happy' }],
+    ['idle', 'Subagent kitten', { kitten: true, fat: 0 }],
+  ];
+  const skinSel = document.getElementById('skin');
+  for (const k of Object.keys(E.SKINS)) skinSel.add(new Option(E.SKINS[k].label, k));
+  const fat = document.getElementById('fat');
+  const scaleSel = document.getElementById('scale');
+  let burpStart = -10;
+  document.getElementById('burp').onclick = () => { burpStart = performance.now() / 1000; };
+  const cards = STATES.map(([state, label, extra]) => {
+    const d = document.createElement('div'); d.className = 'card';
+    const c = document.createElement('canvas');
+    d.append(c); const b = document.createElement('b'); b.textContent = label; d.append(b);
+    document.getElementById('grid').append(d);
+    return { state, extra, c, ctx: c.getContext('2d') };
+  });
+  const hero = document.getElementById('hero'); const hctx = hero.getContext('2d');
+  let heroIdx = 0;
+  setInterval(() => { heroIdx = (heroIdx + 1) % STATES.length; }, 3500);
+  function drawInto(c, ctx, opts, cssW) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.round(cssW * dpr), h = Math.round(cssW * E.H / E.W * dpr);
+    if (c.width !== w) { c.width = w; c.height = h; c.style.width = cssW + 'px'; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.setTransform(w / E.W, 0, 0, w / E.W, 0, 0);
+    E.draw(ctx, opts);
+  }
+  function frame() {
+    const t = performance.now() / 1000;
+    let f = fat.value / 100;
+    let burp = 0;
+    const bt = t - burpStart;
+    if (bt < 2) { burp = bt / 2; const k = Math.min(1, bt / 1.2); f = f * (1 - k) + 0.05 * k; if (bt > 1.9) fat.value = 5; }
+    const base = { skin: skinSel.value, t, fat: f, burp };
+    for (const card of cards) {
+      const opts = Object.assign({}, base, { state: card.state }, card.extra);
+      if (card.extra.pose === 'walk') opts.walkPhase = t * 1.4;
+      drawInto(card.c, card.ctx, opts, GRID ? 140 : card.c.parentElement.clientWidth - 20);
+    }
+    const [hs, , hx] = STATES[heroIdx];
+    const ho = Object.assign({}, base, { state: hs }, hx);
+    if (hx.pose === 'walk') ho.walkPhase = t * 1.4;
+    if (!GRID) drawInto(hero, hctx, ho, Math.min(460, document.body.clientWidth - 32));
+    requestAnimationFrame(frame);
+  }
+  frame();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 {
   "name": "chonkycat",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Chonky Cat: meet Arshia, a chubby always-on-top desktop cat that shows what Claude Code is doing: she types when Claude edits, reads when it reads, gets fatter as the context fills, burps on /compact, sends kittens for subagents and waves when Claude needs you.",
   "license": "MIT",
   "keywords": [
